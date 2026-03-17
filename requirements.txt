@@ -1,0 +1,27 @@
+# Stealth Accumulation Scanner AI Agent
+# Requirements for Indian Stock Market Analysis
+
+# Data Handling
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Technical Analysis
+ta>=0.10.0
+
+# HTTP & API
+requests>=2.31.0
+
+# Scheduler
+apscheduler>=3.10.0
+
+# Telegram Bot
+python-telegram-bot>=20.0
+
+# Configuration
+pyyaml>=6.0
+
+# Logging
+python-dotenv>=1.0.0
+
+# Date/Time handling
+python-dateutil>=2.8.0
