@@ -9,6 +9,7 @@ AI-powered stock accumulation scanner for Indian Markets (NSE) that detects inst
 - **AI Scoring Model**: Weighted scoring (0-100) based on 7 factors
 - **Trade Setups**: Generates entry, stop loss, and targets
 - **Telegram Alerts**: Real-time notifications with actionable insights
+- **Paginated Signals**: Browse through signals 5 at a time with /next and /prev commands
 
 ## 📋 Requirements
 
@@ -58,6 +59,20 @@ python main.py --schedule
 ```bash
 python main.py --test
 ```
+
+### Run Telegram Bot in Polling Mode (for paginated signals)
+
+```bash
+python main.py --poll
+```
+
+This starts the bot in polling mode. After scanning, you can browse signals using Telegram commands:
+
+- `/signals` - Show first 5 signals
+- `/next` - Show next 5 signals
+- `/prev` - Show previous 5 signals
+- `/refresh` - Get instructions to run a new scan
+- `/help` - Show help message
 
 ## 📊 How It Works
 

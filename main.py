@@ -30,6 +30,7 @@ from src.generator.trade_generator import TradeSetupGenerator
 from src.notifications.telegram_bot import TelegramBot
 from src.scheduler.scanner_scheduler import ScannerScheduler
 from src.utils.signal_history import SignalHistory
+from src.utils.signal_cache import SignalCache
 
 
 # Configure logging
@@ -170,6 +171,11 @@ def run_scan(config: dict, logger) -> dict:
         
         results['trade_setups'] = setups
         
+        # Save signals to cache for pagination
+        if setups:
+            signal_cache = SignalCache()
+            signal_cache.update_signals(setups)
+        
         # Send Telegram alerts
         logger.info("Sending Telegram alerts...")
         bot = TelegramBot(config)
@@ -302,6 +308,11 @@ def main():
         help='Test Telegram bot connection'
     )
     parser.add_argument(
+        '--poll',
+        action='store_true',
+        help='Run Telegram bot in polling mode (listen for commands)'
+    )
+    parser.add_argument(
         '--config',
         default='config.yaml',
         help='Path to config file'
@@ -322,6 +333,18 @@ def main():
     # Handle commands
     if args.test:
         test_telegram(config)
+        sys.exit(0)
+    
+    if args.poll:
+        # Start polling mode
+        bot = TelegramBot(config)
+        if bot.is_configured():
+            print("Starting Telegram bot in polling mode...")
+            print("Press Ctrl+C to stop")
+            bot.start_polling()
+        else:
+            print("ERROR: Telegram bot not configured!")
+            sys.exit(1)
         sys.exit(0)
         
     if args.schedule:
