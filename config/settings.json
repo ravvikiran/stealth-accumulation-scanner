@@ -1,0 +1,14 @@
+{
+    "telegram": {
+        "bot_token": "8783468830:AAEkAid5JtrC5tEtcdJ1JKMY3uk1rem_4OM",
+        "chat_id": "647296254"
+    },
+    "scanner": {
+        "timeframe": "1D",
+        "scan_interval_minutes": 15,
+        "max_signals_per_strategy": 2
+    },
+    "stocks": {
+        "config_file": "config/stocks.json"
+    }
+}

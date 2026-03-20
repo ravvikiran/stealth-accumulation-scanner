@@ -453,13 +453,6 @@ def format_telegram_alert(setup: TradeSetup) -> str:
     lines.append(f"{emoji['confidence']} Confidence: {setup.confidence_score}/100")
     lines.append(f"{emoji['risk']} Risk: {setup.risk_level}")
     
-    lines.append("")
-    
-    # Signals
-    lines.append(f"{emoji['signals']} Key Observations:")
-    for signal in setup.signals:
-        lines.append(f"   ✔ {signal}")
-    
     return "\n".join(lines)
 
 

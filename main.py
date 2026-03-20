@@ -96,8 +96,9 @@ def run_scan(config: dict, logger) -> dict:
         filtered_stocks = universe.filter_by_criteria(all_stocks, fetcher)
         logger.info(f"Filtered {len(filtered_stocks)} stocks from {len(all_stocks)} by criteria")
         
-        # For demo, limit to top stocks to avoid API rate limits
-        stocks_to_scan = filtered_stocks[:100]  # First 100 filtered stocks
+        # Use config limit for stocks to scan (default 500)
+        max_stocks = config.get('performance', {}).get('max_stocks_to_scan', 500)
+        stocks_to_scan = filtered_stocks[:max_stocks]
         results['stocks_scanned'] = len(stocks_to_scan)
         
         logger.info(f"Scanning {len(stocks_to_scan)} stocks...")
@@ -147,6 +148,32 @@ def run_scan(config: dict, logger) -> dict:
         
         results['trade_setups'] = setups
         
+        # Collect below-threshold signals for warning alerts
+        below_threshold_setups = []
+        threshold = config.get('scoring', {}).get('thresholds', {}).get('strong_setup', 60)
+        
+        # Generate setups for ALL scored stocks (not just top_stocks)
+        logger.info(f"Generating setups for all {len(scored_stocks)} scored stocks...")
+        all_setups = []
+        for score in scored_stocks:
+            try:
+                signal = signals_dict.get(score.stock_symbol)
+                if signal:
+                    stock_info = fetcher.get_stock_info(score.stock_symbol)
+                    setup = generator.generate_setup(score, signal, stock_info)
+                    
+                    # Mark if below threshold
+                    setup.below_threshold = score.total_score < threshold
+                    all_setups.append(setup)
+            except Exception as e:
+                logger.error(f"Error generating setup for {score.stock_symbol}: {str(e)}")
+        
+        # Separate into above and below threshold
+        above_threshold_setups = [s for s in all_setups if not getattr(s, 'below_threshold', False)]
+        below_threshold_setups = [s for s in all_setups if getattr(s, 'below_threshold', False)]
+        
+        logger.info(f"Generated {len(above_threshold_setups)} above-threshold and {len(below_threshold_setups)} below-threshold setups")
+        
         # If we don't have minimum signals, get more from lower scores
         min_signals = config.get('telegram', {}).get('min_signals_per_scan', 2)
         
@@ -181,7 +208,7 @@ def run_scan(config: dict, logger) -> dict:
         bot = TelegramBot(config)
         
         if bot.is_configured():
-            # Send individual alerts
+            # Send individual alerts for above-threshold setups
             for setup in setups:
                 if bot.send_alert(setup):
                     # Record the signal
@@ -193,8 +220,17 @@ def run_scan(config: dict, logger) -> dict:
                         setup.confidence_score
                     )
             
-            # Send summary
+            # Send summary for above-threshold
             bot.send_summary(setups)
+            
+            # Send below-threshold signals with simple warning indicator
+            if below_threshold_setups:
+                logger.info(f"Sending {len(below_threshold_setups)} below-threshold signals with warning...")
+                for setup in below_threshold_setups[:3]:
+                    try:
+                        bot.send_alert(setup, force_send=True, is_below_threshold=True)
+                    except Exception as e:
+                        logger.warning(f"Failed to send below-threshold alert: {e}")
         else:
             logger.warning("Telegram bot not configured - skipping alerts")
             # Print setups to console
@@ -205,6 +241,15 @@ def run_scan(config: dict, logger) -> dict:
                 print(f"Stop Loss: ₹{setup.stop_loss}")
                 print(f"Targets: ₹{setup.target_1} / ₹{setup.target_2} / ₹{setup.target_3}")
                 print(f"Confidence: {setup.confidence_score}")
+            
+            # Print below-threshold setups to console
+            if below_threshold_setups:
+                print(f"\n{'='*50}")
+                print("⚠️ BELOW THRESHOLD SIGNALS (Not recommended for trading)")
+                print(f"{'='*50}")
+                for setup in below_threshold_setups[:3]:
+                    print(f"\n⚠️ {setup.stock_symbol} | Score: {setup.confidence_score}/100")
+                    print(f"Entry: ₹{setup.entry_price} | SL: ₹{setup.stop_loss}")
         
         # Log results
         end_time = datetime.now()
@@ -216,6 +261,7 @@ def run_scan(config: dict, logger) -> dict:
         logger.info(f"Stocks scanned: {results['stocks_scanned']}")
         logger.info(f"Accumulation signals: {results['accumulation_signals']}")
         logger.info(f"Trade setups generated: {len(setups)}")
+        logger.info(f"Below-threshold signals: {len(below_threshold_setups)}")
         logger.info("=" * 50)
         
     except Exception as e:

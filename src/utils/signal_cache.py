@@ -67,7 +67,7 @@ class SignalCache:
                 'target_3': setup.target_3,
                 'confidence_score': setup.confidence_score,
                 'current_price': setup.current_price,
-                'action': setup.action,
+                'action': getattr(setup, 'action', 'BUY'),
                 'rationale': getattr(setup, 'rationale', '')
             })
         

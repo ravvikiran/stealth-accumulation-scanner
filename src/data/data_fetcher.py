@@ -251,8 +251,23 @@ class StockUniverse:
         Returns:
             List of stock symbols
         """
-        # List of actively traded NSE stocks with correct Yahoo Finance symbols
-        # Large cap and mid-cap stocks that are actively traded
+        # Try to load from config/stocks.json
+        import json
+        from pathlib import Path
+        
+        stocks_file = Path("config/stocks.json")
+        if stocks_file.exists():
+            try:
+                with open(stocks_file, 'r') as f:
+                    stocks = json.load(f)
+                if isinstance(stocks, list) and stocks:
+                    logger.info(f"Loaded {len(stocks)} stocks from config/stocks.json")
+                    return stocks
+            except Exception as e:
+                logger.warning(f"Failed to load stocks from config/stocks.json: {e}")
+        
+        # Fallback to default list if file doesn't exist or fails
+        logger.warning("Using default stock list as fallback")
         nse_stocks = [
             # Large Cap - Using correct Yahoo Finance symbols
             'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'HINDUNILVR', 

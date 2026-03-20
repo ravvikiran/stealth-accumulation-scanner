@@ -366,23 +366,33 @@ I send you stock accumulation signals daily. Use these commands:
             logger.error(f"Error sending Telegram message: {str(e)}")
             return False
     
-    def send_alert(self, setup) -> bool:
+    def send_alert(self, setup, force_send: bool = False, is_below_threshold: bool = False) -> bool:
         """
         Send a trade setup alert
         
         Args:
             setup: TradeSetup object
+            force_send: If True, send even if below threshold
+            is_below_threshold: If True, add warning prefix to message
             
         Returns:
             True if successful, False otherwise
         """
-        if setup.confidence_score < self.alert_threshold:
+        if setup.confidence_score < self.alert_threshold and not force_send:
             logger.info(f"Skipping {setup.stock_symbol} - score below threshold")
             return False
             
         from src.generator.trade_generator import format_telegram_alert
         
         message = format_telegram_alert(setup)
+        
+        # Add simple warning indicator for below-threshold signals
+        if is_below_threshold:
+            message = message.replace(
+                "📊 Stock Alert:",
+                "📊 Stock Alert: ⚠️ BELOW THRESHOLD",
+                1
+            )
         
         return self.send_message(message)
     
