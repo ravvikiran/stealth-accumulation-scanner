@@ -1,0 +1,92 @@
+
+## Analysis Summary: README vs. Implementation
+
+Based on my thorough review of the codebase, I've found **several significant mismatches** and **missing functionality** between what the README documents and what's actually implemented:
+
+### 🔴 **CRITICAL ISSUES**
+
+#### 1. **Data Interval Mismatch (Major Problem)**
+- **README claims**: "Real-time Data: Uses Yahoo Finance for **15-minute OHLCV data**"
+- **Actual code**: DataFetcher.__init__ hardcodes `interval="1D"` (daily data)
+- **Impact**: The entire trend detection based on 15-minute candles is using daily data instead, completely changing the signal accuracy and timing
+- **Not configurable** via CLI despite README documentation
+
+#### 2. **Missing Method: `data_fetcher.is_market_open()`**
+- **Called in**: main.py
+- **Status**: Method doesn't exist in DataFetcher class
+- **Exists only in**: MarketScheduler class
+- **Result**: Code will crash when trying to run a single test scan
+
+#### 3. **Missing Method: `alert_service.test_connection()`**
+- **Called in**: main.py via `scanner.test_telegram()`
+- **Status**: Method doesn't exist in AlertService class
+- **Result**: `python -m src.main --test-telegram` command will crash
+
+---
+
+### ⚠️ **SECURITY & CONFIG ISSUES**
+
+#### 4. **Exposed Telegram Credentials**
+- **File**: settings.json
+- **Problem**: Contains plain-text bot_token and chat_id
+- **Risk**: If repo is committed to version control, credentials are exposed
+- **Should be**: Environment variables only
+
+#### 5. **Incomplete Configuration System**
+- settings.json references stock config but format inconsistency
+- Config loading tries to handle both list and dict formats but doesn't validate properly
+
+---
+
+### ❌ **FEATURES NOT FULLY IMPLEMENTING README SPECS**
+
+#### 6. **Alert Message Format Incomplete**
+- **README shows** detailed format with:
+  - Entry Zone, Stop Loss, Targets with confidence scores
+  - Time estimation to targets
+  - Support/Resistance levels
+- **Actual implementation** sends these but with formatting differences
+- Some complex calculations (ATR-based time estimation, S/R levels) may not display properly
+
+#### 7. **Command Line Options Referenced But Not Working**
+According to README these should work but may fail:
+```bash
+--log-level DEBUG      # Implemented ✅
+--log-file path/to/log # Implemented ✅
+--config stocks.json   # Implemented ✅
+```
+
+#### 8. **VERC Strategy Integration**
+- Strategy exists but needs verification of:
+  - Proper compression detection with daily data
+  - Volume expansion logic with daily intervals
+  - Stock symbol handling (.NS suffix)
+
+---
+
+### 📋 **SUMMARY TABLE**
+
+| Feature | Status | Issue |
+|---------|--------|-------|
+| 500+ Stock monitoring | ✅ | Works but with WRONG timeframe |
+| 15-min data fetching | ❌ | Uses daily (1D) instead |
+| EMA indicators | ✅ | Calculated correctly |
+| Volume MA | ✅ | Calculated correctly |
+| Trend detection | ⚠️ | Logic OK but on wrong timeframe |
+| VERC strategy | ⚠️ | Implemented but untested integration |
+| Telegram alerts | ✅ | Working with partial feature set |
+| Market hours scheduler | ✅ | Works correctly |
+| --strategy flag | ✅ | Works (trend/verc/all) |
+| --test mode | ❌ | Will crash (missing method) |
+| --test-telegram | ❌ | Will crash (missing method) |
+| --mock-alerts | ✅ | Should work |
+
+---
+
+### 🔧 **What Needs to Be Fixed**
+
+1. **Change data interval from daily to 15-minute** - Major change
+2. **Implement `data_fetcher.is_market_open()` method**
+3. **Implement `alert_service.test_connection()` method**  
+4. **Move Telegram credentials to environment variables**
+5. **Add proper error handling for missing methods**

@@ -1,0 +1,54 @@
+Here are all the Git commands from start to finish to push to GitHub:
+
+## 1. Configure Git (first time only)
+```bash
+git config --global user.name "your-new-username"
+git config --global user.email "your-email@example.com"
+```
+
+## 2. Check current status
+```bash
+git status
+```
+
+## 3. Add all files to staging
+```bash
+git add .
+```
+
+## 4. Commit the changes
+```bash
+git commit -m "Your commit message here"
+```
+
+## 5. Check remote URL (verify it's your new account)
+```bash
+git remote -v
+```
+
+## 6. If remote is wrong, set correct URL
+```bash
+git remote set-url origin https://github.com/NEW_USERNAME/YOUR_REPO_NAME.git
+```
+
+## 7. Push to GitHub
+```bash
+git push -u origin main
+```
+Or if branch is "master":
+```bash
+git push -u origin master
+```
+
+## Quick one-liner (add + commit + push)
+```bash
+git add . && git commit -m "Your message" && git push
+```
+
+## If push fails due to authentication
+Generate a Personal Access Token from GitHub and use it as your password, or use:
+```bash
+git push https://username:TOKEN@github.com/username/repo.git
+```
+
+Run these commands in the VSCode terminal (`Ctrl + ``).
