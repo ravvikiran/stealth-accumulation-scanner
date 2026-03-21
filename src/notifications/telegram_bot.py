@@ -1,6 +1,7 @@
 """
 Telegram Bot Notification System
 Sends trade setup alerts via Telegram with pagination support
+Two-way communication enabled: users can query signals and analyze stocks
 """
 
 import requests
@@ -8,6 +9,7 @@ from typing import List, Dict, Optional
 import logging
 import os
 import json
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -156,18 +158,289 @@ class TelegramBot:
         
         return message
     
-    def handle_command(self, command: str, chat_id: str = None) -> bool:
+    def _is_stock_query(self, text: str) -> Optional[str]:
         """
-        Handle Telegram commands
+        Check if the text is a stock query (stock symbol or name)
         
         Args:
-            command: The command to handle
+            text: User input text
+            
+        Returns:
+            Stock symbol if detected, None otherwise
+        """
+        # Clean the input
+        text = text.strip().upper()
+        
+        # Check if it's a command (starts with /)
+        if text.startswith('/'):
+            return None
+        
+        # Common stock symbols patterns (2-10 uppercase letters)
+        # Also allow names like "RELIANCE", "TCS", etc.
+        stock_pattern = re.compile(r'^[A-Z]{2,10}$')
+        
+        # Check if it matches a stock symbol pattern
+        if stock_pattern.match(text):
+            return text
+        
+        # Check if it's a query for signals (various phrasings)
+        signal_keywords = ['SIGNALS', 'SHOW SIGNALS', 'GET SIGNALS', 'TODAY SIGNALS', 
+                          'CURRENT SIGNALS', 'LATEST SIGNALS', 'WHAT ARE THE SIGNALS',
+                          'NEXT SIGNALS', 'MORE SIGNALS', 'ALL SIGNALS']
+        
+        if text in signal_keywords:
+            return '__SIGNALS__'
+        
+        return None
+    
+    def analyze_stock(self, symbol: str) -> Optional[str]:
+        """
+        Analyze a single stock on-demand
+        
+        Args:
+            symbol: Stock symbol to analyze
+            
+        Returns:
+            Formatted analysis message or None if failed
+        """
+        try:
+            # Import required modules
+            from src.data.data_fetcher import NSEDataFetcher, load_config
+            from src.scanner.accumulation_detector import AccumulationDetector
+            from src.scoring.ai_scorer import AIScoringModel
+            from src.generator.trade_generator import TradeSetupGenerator
+            
+            # Load config
+            config = load_config("config.yaml")
+            
+            # Initialize components
+            fetcher = NSEDataFetcher(config)
+            detector = AccumulationDetector(config)
+            scorer = AIScoringModel(config)
+            generator = TradeSetupGenerator(config)
+            
+            # Get stock data
+            price_data = fetcher.get_stock_data(symbol, period="1y", interval="1d")
+            
+            if price_data is None or len(price_data) < 60:
+                return None
+            
+            # Get delivery data
+            delivery_data = fetcher.get_delivery_data(symbol, days=20)
+            
+            # Get index data for relative strength
+            index_data = fetcher.get_index_data("^NSEI", period="3mo")
+            
+            # Analyze the stock
+            signal = detector.analyze(symbol, price_data, delivery_data, index_data)
+            
+            # Score the signal
+            score = scorer.score_signal(signal)
+            
+            # Get stock info
+            stock_info = fetcher.get_stock_info(symbol)
+            
+            # Generate trade setup
+            setup = generator.generate_setup(score, signal, stock_info)
+            
+            # Format the analysis message
+            return self._format_stock_analysis(setup, score, stock_info)
+            
+        except Exception as e:
+            logger.error(f"Error analyzing stock {symbol}: {str(e)}")
+            return None
+    
+    def _format_stock_analysis(self, setup, score, stock_info) -> str:
+        """
+        Format stock analysis as Telegram message
+        
+        Args:
+            setup: TradeSetup object
+            score: StockScore object
+            stock_info: Stock info dict
+            
+        Returns:
+            Formatted message string
+        """
+        # Determine action based on recommendation
+        rec = score.recommendation.upper()
+        if rec == 'BUY':
+            action_emoji = '🟢'
+            action_text = 'BUY - Strong Accumulation'
+        elif rec == 'WATCH':
+            action_emoji = '🟡'
+            action_text = 'WATCH - Moderate Setup'
+        else:
+            action_emoji = '🔴'
+            action_text = 'SKIP - Weak Setup'
+        
+        # Build message
+        lines = []
+        
+        # Header
+        stock_name = stock_info.get('name', setup.stock_symbol) if stock_info else setup.stock_symbol
+        lines.append(f"📊 *Stock Analysis: {setup.stock_symbol}*")
+        if stock_name != setup.stock_symbol:
+            lines.append(f"   {stock_name}")
+        
+        lines.append("")
+        
+        # Action
+        lines.append(f"{action_emoji} *Recommendation: {action_text}*")
+        lines.append(f"   Confidence Score: {setup.confidence_score}/100")
+        
+        lines.append("")
+        
+        # Current Price
+        lines.append(f"💰 *Current Price: ₹{setup.current_price:.2f}*")
+        
+        lines.append("")
+        
+        # Trade Setup
+        lines.append("📈 *Trade Setup:*")
+        lines.append(f"   Entry: ₹{setup.entry_price:.2f}")
+        lines.append(f"   Stop Loss: ₹{setup.stop_loss:.2f} (-{setup.stop_loss_pct:.1f}%)")
+        lines.append(f"   Targets: ₹{setup.target_1:.2f} → ₹{setup.target_2:.2f} → ₹{setup.target_3:.2f}")
+        lines.append(f"   Risk/Reward: {setup.risk_reward_1:.1f}R : {setup.risk_reward_2:.1f}R : {setup.risk_reward_3:.1f}R")
+        
+        lines.append("")
+        
+        # Technical Levels
+        lines.append("📍 *Technical Levels:*")
+        lines.append(f"   Support: ₹{setup.support_level:.2f}")
+        lines.append(f"   Resistance: ₹{setup.resistance_level:.2f}")
+        lines.append(f"   Range: ₹{setup.range_low:.2f} - ₹{setup.range_high:.2f}")
+        
+        if setup.near_breakout:
+            lines.append(f"   ⚡ Near Breakout ({setup.breakout_distance_pct:.1f}% away)")
+        
+        lines.append("")
+        
+        # Analysis Factors
+        lines.append("📋 *Analysis Factors:*")
+        
+        # Positive factors
+        if score.positive_factors:
+            for factor in score.positive_factors[:5]:
+                lines.append(f"   ✅ {factor}")
+        
+        # Negative factors
+        if score.negative_factors:
+            for factor in score.negative_factors[:3]:
+                lines.append(f"   ❌ {factor}")
+        
+        lines.append("")
+        
+        # Additional info
+        if stock_info:
+            sector = stock_info.get('sector')
+            if sector:
+                lines.append(f"🏢 *Sector:* {sector}")
+            
+            pe = stock_info.get('pe_ratio')
+            if pe:
+                lines.append(f"📊 *P/E Ratio:* {pe:.2f}")
+            
+            week52_high = stock_info.get('52w_high')
+            week52_low = stock_info.get('52w_low')
+            if week52_high and week52_low:
+                lines.append(f"📈 *52W Range:* ₹{week52_low:.2f} - ₹{week52_high:.2f}")
+        
+        lines.append("")
+        
+        # Duration
+        lines.append(f"⏳ *Expected Duration:* {setup.expected_duration}")
+        lines.append(f"⚠️ *Risk Level:* {setup.risk_level}")
+        
+        lines.append("")
+        
+        # Footer
+        lines.append("---")
+        lines.append("🔄 *Commands:*")
+        lines.append("/signals - Show current signals")
+        lines.append("/next - Next 5 signals")
+        lines.append("/analyze SYMBOL - Analyze a stock")
+        lines.append("/help - Show all commands")
+        
+        return "\n".join(lines)
+    
+    def _handle_signals_request(self, chat_id: str, page: int = 0) -> bool:
+        """
+        Handle signals request with pagination
+        
+        Args:
+            chat_id: Chat ID to respond to
+            page: Page number (0-indexed)
+            
+        Returns:
+            True if response was sent
+        """
+        cache = self._load_cache()
+        signals = cache.get('signals', [])
+        page_size = 5
+        
+        if not signals:
+            return self.send_message_to_chat(chat_id, 
+                "📊 *No Signals Available*\n\nThere are no signals to display.\n\nPlease run `python main.py` first to scan for signals!")
+        
+        # Reset to requested page
+        cache['current_page'] = page
+        self._save_cache(cache)
+        
+        start = page * page_size
+        page_signals = signals[start:start + page_size]
+        
+        total_pages = (len(signals) - 1) // page_size + 1
+        
+        page_info = {
+            'current_page': page + 1,
+            'total_pages': total_pages,
+            'scan_time': cache.get('scan_time')
+        }
+        
+        message = self.format_signal_message(page_signals, page_info)
+        return self.send_message_to_chat(chat_id, message)
+    
+    def handle_command(self, text: str, chat_id: str = None) -> bool:
+        """
+        Handle Telegram commands and stock queries
+        
+        Args:
+            text: The command or message to handle
             chat_id: Chat ID to respond to
             
         Returns:
             True if response was sent
         """
         target_chat = chat_id or self.chat_id
+        
+        # Check if it's a stock query
+        stock_query = self._is_stock_query(text)
+        
+        # Handle signals query
+        if stock_query == '__SIGNALS__':
+            return self._handle_signals_request(target_chat, page=0)
+        
+        # Handle stock analysis request
+        if stock_query and stock_query != '__SIGNALS__':
+            # Check if it's an /analyze command with symbol
+            if text.strip().upper().startswith('/ANALYZE'):
+                # Extract symbol from command
+                parts = text.strip().split()
+                if len(parts) > 1:
+                    stock_query = parts[1].upper()
+            
+            # Analyze the stock
+            message = self.analyze_stock(stock_query)
+            
+            if message:
+                return self.send_message_to_chat(target_chat, message)
+            else:
+                error_msg = f"❌ Could not analyze {stock_query}.\n\nPlease check:\n• Symbol is correct (e.g., RELIANCE, TCS)\n• Stock has sufficient data\n\nTry: /analyze RELIANCE"
+                return self.send_message_to_chat(target_chat, error_msg)
+        
+        # Handle regular commands
+        command = text.strip()
         
         cache = self._load_cache()
         signals = cache.get('signals', [])
@@ -182,32 +455,20 @@ I send you stock accumulation signals daily. Use these commands:
 • /signals - Show current signals (5 at a time)
 • /next - Next 5 signals
 • /prev - Previous 5 signals
+• /analyze SYMBOL - Analyze a specific stock
 • /refresh - Run a new scan
 • /help - Show this help
+
+*Examples:*
+• Send `RELIANCE` to analyze that stock
+• Send `TCS` to get analysis
+• Send `signals` to see current signals
 
 *Note:* Run `python main.py` first to generate signals!"""
             return self.send_message_to_chat(target_chat, message)
         
         elif command == '/signals' or command == '/current':
-            if not signals:
-                return self.send_message_to_chat(target_chat, 
-                    "No signals available. Please run `python main.py` first to scan for signals!")
-            
-            current_page = 0
-            cache['current_page'] = 0
-            self._save_cache(cache)
-            
-            start = current_page * page_size
-            page_signals = signals[start:start + page_size]
-            
-            page_info = {
-                'current_page': current_page + 1,
-                'total_pages': (len(signals) - 1) // page_size + 1 if signals else 0,
-                'scan_time': cache.get('scan_time')
-            }
-            
-            message = self.format_signal_message(page_signals, page_info)
-            return self.send_message_to_chat(target_chat, message)
+            return self._handle_signals_request(target_chat, page=0)
         
         elif command == '/next':
             if not signals:
@@ -258,8 +519,23 @@ I send you stock accumulation signals daily. Use these commands:
             message = "🔄 To refresh signals, please run `python main.py` on your server/PC.\n\nThis bot receives signals after each scan completes."
             return self.send_message_to_chat(target_chat, message)
         
+        elif command.startswith('/analyze '):
+            # Extract symbol from /analyze command
+            parts = command.split()
+            if len(parts) > 1:
+                symbol = parts[1].upper()
+                message = self.analyze_stock(symbol)
+                
+                if message:
+                    return self.send_message_to_chat(target_chat, message)
+                else:
+                    error_msg = f"❌ Could not analyze {symbol}.\n\nPlease check:\n• Symbol is correct (e.g., RELIANCE, TCS)\n• Stock has sufficient data\n\nTry: /analyze RELIANCE"
+                    return self.send_message_to_chat(target_chat, error_msg)
+            else:
+                return self.send_message_to_chat(target_chat, "Usage: /analyze SYMBOL\nExample: /analyze RELIANCE")
+        
         else:
-            message = f"Unknown command: {command}\n\nUse /help for available commands."
+            message = f"Unknown command: {command}\n\nUse /help for available commands.\n\nYou can also send a stock symbol (e.g., RELIANCE) to analyze it!"
             return self.send_message_to_chat(target_chat, message)
     
     def start_polling(self):
@@ -318,53 +594,6 @@ I send you stock accumulation signals daily. Use these commands:
                 logger.error(f"Polling error: {e}")
                 import time
                 time.sleep(5)
-        
-    def is_configured(self) -> bool:
-        """Check if bot is properly configured"""
-        return (
-            self.enabled and 
-            self.bot_token and 
-            self.bot_token != 'YOUR_BOT_TOKEN_HERE' and
-            self.chat_id and 
-            self.chat_id != 'YOUR_CHAT_ID_HERE'
-        )
-    
-    def send_message(self, message: str, parse_mode: str = 'Markdown') -> bool:
-        """
-        Send a message via Telegram
-        
-        Args:
-            message: Message text to send
-            parse_mode: Parse mode ('Markdown' or 'HTML')
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        if not self.is_configured():
-            logger.warning("Telegram bot not configured. Message not sent.")
-            return False
-            
-        try:
-            url = f"{self.api_url}/sendMessage"
-            
-            data = {
-                'chat_id': self.chat_id,
-                'text': message,
-                'parse_mode': parse_mode
-            }
-            
-            response = requests.post(url, json=data, timeout=30)
-            
-            if response.status_code == 200:
-                logger.info("Telegram message sent successfully")
-                return True
-            else:
-                logger.error(f"Telegram API error: {response.status_code} - {response.text}")
-                return False
-                
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error sending Telegram message: {str(e)}")
-            return False
     
     def send_alert(self, setup, force_send: bool = False, is_below_threshold: bool = False) -> bool:
         """

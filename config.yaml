@@ -65,10 +65,14 @@ trade_setup:
     atr_period: 14
 
 # Telegram Bot Configuration
+# NOTE: Sensitive values should be set via environment variables:
+# - TELEGRAM_BOT_TOKEN
+# - TELEGRAM_CHAT_ID
+# Or copy .env.example to .env and fill in your values
 telegram:
   enabled: true
-  bot_token: "8783468830:AAEkAid5JtrC5tEtcdJ1JKMY3uk1rem_4OM" # Replace with your bot token
-  chat_id: "647296254" # Replace with your chat ID
+  bot_token: "" # Set via TELEGRAM_BOT_TOKEN env var
+  chat_id: "" # Set via TELEGRAM_CHAT_ID env var
   alert_threshold: 60 # Only send alerts for scores >= 60
   min_signals_per_scan: 2 # Minimum signals to send (pad with lower scores if needed)
 

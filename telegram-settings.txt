@@ -1,0 +1,37 @@
+I've implemented two-way communication in the Telegram bot. The following features have been added to [`src/notifications/telegram_bot.py`](src/notifications/telegram_bot.py):
+
+## 1. Signals Query (First 5 and Next Set of 5)
+Users can now query signals in natural language by sending:
+- `signals` or `show signals` or `get signals` - shows first 5 signals
+- `/signals` - shows first 5 signals with pagination
+- `/next` - shows next 5 signals
+- `/prev` - shows previous 5 signals
+- If no signals available, the bot responds with "No Signals Available" message
+
+## 2. Stock Query (Analyze Any Stock)
+Users can send a stock symbol/name to get full analysis:
+- Send just the symbol: `RELIANCE`, `TCS`, `HDFCBANK`, etc.
+- Use command: `/analyze RELIANCE`
+- The bot will fetch live data and provide:
+  - **Recommendation**: Buy/Watch/Skip with confidence score
+  - **Current Price**: Live price
+  - **Trade Setup**: Entry, Stop Loss, Targets, Risk/Reward ratios
+  - **Technical Levels**: Support, Resistance, Range
+  - **Analysis Factors**: Positive and negative factors based on:
+    - Price structure (consolidation)
+    - Volume behavior
+    - Delivery percentage trends
+    - Support strength
+    - Relative strength vs Nifty
+    - Volatility compression
+    - Moving average behavior
+  - **Additional Info**: Sector, P/E ratio, 52-week range
+  - **Risk Level**: Low/Moderate/High
+
+## Key Methods Added
+- [`_is_stock_query()`](src/notifications/telegram_bot.py:161) - Detects if user input is a stock symbol
+- [`analyze_stock()`](src/notifications/telegram_bot.py:216) - Analyzes a single stock on-demand
+- [`_format_stock_analysis()`](src/notifications/telegram_bot.py:298) - Formats analysis results as Telegram message
+- [`_handle_signals_request()`](src/notifications/telegram_bot.py:394) - Handles signals pagination
+
+To use the polling mode: `python main.py --poll`

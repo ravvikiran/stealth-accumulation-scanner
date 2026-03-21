@@ -4,7 +4,7 @@ AI-powered stock accumulation scanner for Indian Markets (NSE) that detects inst
 
 ## 🚀 Features
 
-- **Daily Scanning**: Automatically scans NSE stocks at 3:00 PM IST
+- **Real-time Scanning**: Automatically scans NSE stocks every 15 minutes during market hours (9:15 AM - 3:30 PM IST)
 - **Wyckoff Accumulation Detection**: Identifies institutional buying patterns
 - **AI Scoring Model**: Weighted scoring (0-100) based on 7 factors
 - **Trade Setups**: Generates entry, stop loss, and targets
@@ -33,12 +33,23 @@ AI-powered stock accumulation scanner for Indian Markets (NSE) that detects inst
    - Start a chat with your bot
    - Get your chat ID from `@userinfobot` or use the API
 
-4. **Update `config.yaml`**:
-   ```yaml
-   telegram:
-     bot_token: "YOUR_BOT_TOKEN"
-     chat_id: "YOUR_CHAT_ID"
-   ```
+4. **Set up environment variables** (recommended):
+   - Copy the example environment file:
+     ```bash
+     cp .env.example .env
+     ```
+   - Edit `.env` and fill in your Telegram credentials:
+     ```
+     TELEGRAM_BOT_TOKEN=your_bot_token_here
+     TELEGRAM_CHAT_ID=your_chat_id_here
+     ```
+   - Or update `config.yaml` directly (not recommended for production):
+     ```yaml
+     telegram:
+       bot_token: "YOUR_BOT_TOKEN"
+       chat_id: "YOUR_CHAT_ID"
+     ```
+   - The `.env` file is automatically ignored by git (see `.gitignore`)
 
 ## 🎯 Usage
 
@@ -48,7 +59,7 @@ AI-powered stock accumulation scanner for Indian Markets (NSE) that detects inst
 python main.py
 ```
 
-### Run with Scheduler (Daily at 3 PM)
+### Run with Scheduler (Every 15 minutes during market hours)
 
 ```bash
 python main.py --schedule
@@ -154,6 +165,13 @@ This system identifies **probability, not certainty**. Always:
 ## 📝 License
 
 MIT License - Use at your own risk.
+
+## 📈 Additional Features
+
+- **Volume Compression Strategy (VERC)**: Additional detection algorithm for volume compression patterns
+- **Signal History Tracking**: Prevents duplicate alerts within 24 hours
+- **Advanced Caching**: Data and signal caching for performance optimization
+- **Configurable Scanning**: Adjustable interval and market hours via config.yaml
 
 ## 🔄 Future Enhancements
 

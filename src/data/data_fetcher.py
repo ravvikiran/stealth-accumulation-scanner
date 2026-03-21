@@ -354,7 +354,10 @@ class StockUniverse:
 
 def load_config(config_path: str = "config.yaml") -> Dict:
     """
-    Load configuration from YAML file
+    Load configuration from YAML file and environment variables
+    
+    Environment variables take precedence over YAML config.
+    Uses .env file for local development (should be in .gitignore)
     
     Args:
         config_path: Path to config file
@@ -363,10 +366,43 @@ def load_config(config_path: str = "config.yaml") -> Dict:
         Configuration dictionary
     """
     import yaml
+    from pathlib import Path
+    
+    # Try to load .env file if it exists
+    env_file = Path(".env")
+    if env_file.exists():
+        from dotenv import load_dotenv
+        load_dotenv()
     
     try:
         with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
+            config = yaml.safe_load(f) or {}
+        
+        # Override with environment variables
+        # Telegram settings
+        import os
+        bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+        chat_id = os.getenv('TELEGRAM_CHAT_ID')
+        alert_threshold = os.getenv('TELEGRAM_ALERT_THRESHOLD')
+        
+        if 'telegram' not in config:
+            config['telegram'] = {}
+        
+        if bot_token:
+            config['telegram']['bot_token'] = bot_token
+        if chat_id:
+            config['telegram']['chat_id'] = chat_id
+        if alert_threshold:
+            config['telegram']['alert_threshold'] = int(alert_threshold)
+        
+        # Scheduler settings
+        interval = os.getenv('SCAN_INTERVAL_MINUTES')
+        if interval and 'scheduler' not in config:
+            config['scheduler'] = {}
+        if interval:
+            config['scheduler']['interval_minutes'] = int(interval)
+        
+        return config
     except Exception as e:
         logger.error(f"Error loading config: {str(e)}")
         return {}
