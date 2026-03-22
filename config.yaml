@@ -125,21 +125,33 @@ performance:
   batch_size: 50 # Process in batches
   timeout_seconds: 30 # API timeout
 
-# LLM Configuration (AI-powered analysis)
+# LLM Configuration (AI-powered analysis with automatic failover)
 # Set enabled: true to use AI for generating detailed analysis
 llm:
   enabled: false  # Set to true to enable AI analysis
   
-  # Primary provider: openai, anthropic, or gemini
+  # Primary/fallback provider preference
+  # Order of failover: ollama -> minimax -> gemini -> anthropic -> openai
+  # (free providers are tried first)
   provider: "openai"
   
   # Model settings (optional - defaults shown)
   openai_model: "gpt-4o"
   anthropic_model: "claude-3-5-sonnet-20241022"
   gemini_model: "gemini-1.5-pro"
+  minimax_model: "abab6.5s-chat"
+  ollama_model: "llama2"
+  
+  # Ollama URL (if running locally)
+  ollama_url: "http://localhost:11434"
   
   # API Keys - MUST be set via environment variables:
   # - OPENAI_API_KEY
   # - ANTHROPIC_API_KEY  
   # - GEMINI_API_KEY
+  # - MINIMAX_API_KEY (free tier available at https://platform.minimax.io)
   # Or add them to .env file
+  
+  # Rate limit recovery time (seconds)
+  # How long to wait before retrying a rate-limited provider
+  rate_limit_recovery_seconds: 300
