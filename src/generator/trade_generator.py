@@ -3,8 +3,6 @@ Trade Setup Generator
 Generates actionable trade setups with entry, stop loss, and targets
 """
 
-import pandas as pd
-import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 import logging
@@ -383,7 +381,7 @@ class TradeSetupGenerator:
                 # Get stock info
                 try:
                     stock_info = fetcher.get_stock_info(score.stock_symbol)
-                except:
+                except Exception:
                     stock_info = None
                 
                 setup = self.generate_setup(score, signal, stock_info)

@@ -6,7 +6,7 @@ Prevents duplicate alerts by tracking sent signals
 import json
 import os
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List
 from pathlib import Path
 import logging
 
@@ -86,10 +86,6 @@ class SignalHistory:
                 if price_change_pct > 3:
                     logger.info(f"{stock_symbol}: Price changed {price_change_pct:.1f}%, sending new alert")
                     return True
-                
-                # Check if confidence score changed significantly
-                prev_confidence = prev_signal.get('confidence_score', 0)
-                # This would need to be passed in, so we'll skip this check
                 
                 logger.info(f"{stock_symbol}: Signal already sent {age:.1f}h ago, skipping")
                 return False

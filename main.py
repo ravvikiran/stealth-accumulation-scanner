@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.data.data_fetcher import NSEDataFetcher, StockUniverse, load_config
-from src.scanner.accumulation_detector import AccumulationDetector, calculate_all_signals
+from src.scanner.accumulation_detector import calculate_all_signals
 from src.scoring.ai_scorer import AIScoringModel, get_top_stocks
 from src.generator.trade_generator import TradeSetupGenerator
 from src.notifications.telegram_bot import TelegramBot
@@ -309,8 +309,6 @@ def run_scheduled(config: dict, logger):
 
 def test_telegram(config: dict):
     """Test Telegram bot connection"""
-    logger = logging.getLogger(__name__)
-    
     bot = TelegramBot(config)
     
     if not bot.is_configured():

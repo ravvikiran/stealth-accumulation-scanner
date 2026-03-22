@@ -4,14 +4,10 @@ Fetches OHLCV and delivery data from NSE/Yahoo Finance
 """
 
 import pandas as pd
-import numpy as np
 import requests
 import yfinance as yf
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
 import logging
-import time
-import os
 
 logger = logging.getLogger(__name__)
 

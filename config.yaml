@@ -124,3 +124,22 @@ performance:
   max_stocks_to_scan: 900 # Limit stocks to scan
   batch_size: 50 # Process in batches
   timeout_seconds: 30 # API timeout
+
+# LLM Configuration (AI-powered analysis)
+# Set enabled: true to use AI for generating detailed analysis
+llm:
+  enabled: false  # Set to true to enable AI analysis
+  
+  # Primary provider: openai, anthropic, or gemini
+  provider: "openai"
+  
+  # Model settings (optional - defaults shown)
+  openai_model: "gpt-4o"
+  anthropic_model: "claude-3-5-sonnet-20241022"
+  gemini_model: "gemini-1.5-pro"
+  
+  # API Keys - MUST be set via environment variables:
+  # - OPENAI_API_KEY
+  # - ANTHROPIC_API_KEY  
+  # - GEMINI_API_KEY
+  # Or add them to .env file

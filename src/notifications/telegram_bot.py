@@ -13,6 +13,15 @@ import re
 
 logger = logging.getLogger(__name__)
 
+# LLM imports
+try:
+    from src.llm.llm_client import get_llm_client
+    from src.llm.prompts import SYSTEM_PROMPT, build_stock_analysis_prompt, format_telegram_response
+    LLM_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"LLM module not available: {e}")
+    LLM_AVAILABLE = False
+
 
 class TelegramBot:
     """
@@ -32,6 +41,15 @@ class TelegramBot:
         
         # Signal cache file path
         self.cache_file = "data/signal_cache.json"
+        
+        # Initialize LLM client if available
+        self.llm_client = None
+        if LLM_AVAILABLE:
+            try:
+                self.llm_client = get_llm_client(config)
+                logger.info(f"LLM client initialized - Enabled: {self.llm_client.is_enabled()}")
+            except Exception as e:
+                logger.error(f"Failed to initialize LLM client: {e}")
     
     def is_configured(self) -> bool:
         """Check if bot is properly configured"""
@@ -243,7 +261,35 @@ class TelegramBot:
             # Generate trade setup
             setup = generator.generate_setup(score, signal, stock_info)
             
-            # Format the analysis message
+            # Try to get LLM analysis if available
+            llm_response = None
+            if self.llm_client and self.llm_client.is_available():
+                try:
+                    # Build LLM prompt
+                    stock_name = stock_info.get('name', symbol) if stock_info else symbol
+                    user_prompt = build_stock_analysis_prompt(
+                        symbol=symbol,
+                        stock_name=stock_name,
+                        score=score,
+                        signal=signal,
+                        setup=setup,
+                        stock_info=stock_info
+                    )
+                    
+                    # Get LLM response
+                    llm_response = self.llm_client.generate_analysis(
+                        system_prompt=SYSTEM_PROMPT,
+                        user_prompt=user_prompt
+                    )
+                    
+                    if llm_response:
+                        logger.info(f"LLM analysis generated for {symbol}")
+                        # Format with header and footer
+                        return format_telegram_response(llm_response, symbol, score, setup)
+                except Exception as e:
+                    logger.error(f"LLM analysis failed for {symbol}: {e}")
+            
+            # Fallback to original formatted response
             return self._format_stock_analysis(setup, score, stock_info)
             
         except Exception as e:

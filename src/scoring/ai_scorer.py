@@ -3,8 +3,6 @@ AI Scoring Model
 Assigns confidence scores (0-100) to stocks based on accumulation factors
 """
 
-import pandas as pd
-import numpy as np
 from typing import Dict, List
 from dataclasses import dataclass
 import logging

@@ -5,9 +5,8 @@ Implements Wyckoff-style institutional accumulation detection
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from dataclasses import dataclass
-from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -531,7 +530,7 @@ def calculate_all_signals(
             # Get delivery data
             try:
                 delivery_data = fetcher.get_delivery_data(symbol, days=30)
-            except:
+            except Exception:
                 delivery_data = None
             
             # Run analysis
