@@ -68,7 +68,7 @@ class TradeSetup:
     ai_score: Optional[int] = None
     reasoning_text: str = ""
     confidence_level: str = "medium"
-    below_threshold: bool = False  # Track if signal is below score threshold
+    below_threshold: bool = False  # TODO: Populate when filtering signals below score threshold
 
 
 class TradeSetupGenerator:
