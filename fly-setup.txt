@@ -19,16 +19,14 @@ fly secrets set TELEGRAM_CHAT_ID=your_chat_id
 fly deploy
 ```
 
-That's it! You'll get a public URL like `https://stealth-scanner.fly.dev` and your bot will work immediately.
+public URL like `https://stealth-scanner.fly.dev` and bot will work immediately.
 
 ---
 
 ### One Caveat
 
-The first time you deploy, it asks for credit card (for identity verification), but **you won't be charged**. You can skip this with:
+The first time deploy, it asks for credit card (for identity verification), but **you won't be charged**. You can skip this with:
 ```bash
 fly launch --name your-app --no-deploy
 # Then manually set card to "Free" in billing settings
 ```
-
-**Go ahead - Fly.io is your best free option.**
