@@ -88,7 +88,12 @@ class SignalCache:
             List of signal dictionaries
         """
         if page is not None:
-            self.current_page = page
+            # Validate and clamp page number to valid range
+            total_pages = (len(self.signals) - 1) // self.page_size + 1 if self.signals else 0
+            if total_pages > 0:
+                self.current_page = max(0, min(page, total_pages - 1))
+            else:
+                self.current_page = 0
         
         start = self.current_page * self.page_size
         end = start + self.page_size

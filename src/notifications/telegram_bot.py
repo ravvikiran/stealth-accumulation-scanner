@@ -661,6 +661,22 @@ I send you stock accumulation signals daily. Use these commands:
         
         message = format_telegram_alert(setup)
         
+        # Add reasoning information if available
+        reasoning_config = self.config.get('reasoning', {})
+        if reasoning_config.get('explanation', {}).get('include_in_telegram', True):
+            if hasattr(setup, 'reasoning_text') and setup.reasoning_text:
+                message += "\n\n🧠 Reasoning:\n" + setup.reasoning_text[:300]
+            
+            # Add confidence level indicator
+            if hasattr(setup, 'confidence_level') and setup.confidence_level:
+                level_emoji = {'high': '🟢', 'medium': '🟡', 'low': '🔴'}
+                level = level_emoji.get(setup.confidence_level, '🟡')
+                message += f"\n\n{level} Confidence Level: {setup.confidence_level.upper()}"
+            
+            # Add AI score if available
+            if hasattr(setup, 'ai_score') and setup.ai_score:
+                message += f"\n🤖 AI Score: {setup.ai_score}/100"
+        
         # Add simple warning indicator for below-threshold signals
         if is_below_threshold:
             message = message.replace(

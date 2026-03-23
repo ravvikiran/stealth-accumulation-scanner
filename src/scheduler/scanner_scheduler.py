@@ -111,6 +111,33 @@ class ScannerScheduler:
             'job_id': self.job.id if self.job else None,
             'interval_minutes': self.interval_minutes
         }
+    
+    def add_monitor_job(self, func: Callable, job_id: str = 'monitor_job') -> None:
+        """
+        Add a signal monitoring job to the scheduler
+        
+        Args:
+            func: Function to run for monitoring
+            job_id: Unique job identifier
+        """
+        # Get monitoring interval from config
+        sie_config = self.config.get('signal_intelligence', {})
+        monitor_interval = sie_config.get('monitoring', {}).get('check_interval_minutes', 15)
+        
+        trigger = IntervalTrigger(
+            minutes=monitor_interval,
+            timezone=self.timezone
+        )
+        
+        self.scheduler.add_job(
+            func,
+            trigger=trigger,
+            id=job_id,
+            name='Signal Monitor (Check active signals)',
+            replace_existing=True
+        )
+        
+        logger.info(f"Signal monitoring job scheduled: every {monitor_interval} minutes")
 
 
 def create_scheduler(config: dict) -> ScannerScheduler:

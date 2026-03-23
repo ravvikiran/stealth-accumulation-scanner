@@ -31,6 +31,7 @@ from src.notifications.telegram_bot import TelegramBot
 from src.scheduler.scanner_scheduler import ScannerScheduler
 from src.utils.signal_history import SignalHistory
 from src.utils.signal_cache import SignalCache
+from src.intelligence.sie_orchestrator import SIEOrchestrator
 
 
 # Configure logging
@@ -114,10 +115,50 @@ def run_scan(config: dict, logger) -> dict:
             logger.info("No accumulation patterns detected")
             return results
             
-        # Score signals
-        logger.info("Scoring accumulation signals...")
-        scorer = AIScoringModel(config)
-        scored_stocks = scorer.score_all_signals(signals)
+        # Score signals using Hybrid Reasoning Engine
+        logger.info("Scoring signals with Hybrid Reasoning Engine...")
+        
+        # Check if reasoning is enabled
+        reasoning_enabled = config.get('reasoning', {}).get('enabled', True)
+        
+        if reasoning_enabled:
+            # Use Hybrid Scorer
+            from src.reasoning.hybrid_scorer import HybridScorer
+            hybrid_scorer = HybridScorer(config)
+            reasoning_results = hybrid_scorer.score_all_signals(signals)
+            
+            # Convert to StockScore-like objects for compatibility
+            scored_stocks = []
+            for res in reasoning_results:
+                from src.scoring.ai_scorer import StockScore
+                # Use rule_score for rule-based components, ai_score for AI components
+                # Use total_score as the combined score
+                rule_component = res.rule_score if res.rule_score else 0
+                ai_component = res.ai_score if res.ai_score else 0
+                scored_stocks.append(StockScore(
+                    stock_symbol=res.stock_symbol,
+                    total_score=res.total_score,
+                    price_structure_score=rule_component,
+                    volume_behavior_score=rule_component,
+                    delivery_data_score=rule_component,
+                    support_strength_score=rule_component,
+                    relative_strength_score=ai_component if ai_component > 0 else rule_component,
+                    volatility_compression_score=rule_component,
+                    ma_behavior_score=rule_component,
+                    classification="Moderate Setup" if res.total_score >= 60 else "Weak Setup",
+                    recommendation="Watch" if res.total_score >= 60 else "Skip",
+                    positive_factors=res.positive_factors,
+                    negative_factors=res.negative_factors
+                ))
+            
+            # Store reasoning results for later use
+            reasoning_map = {r.stock_symbol: r for r in reasoning_results}
+            logger.info(f"Scored {len(scored_stocks)} signals with hybrid reasoning")
+        else:
+            # Fallback to original scoring
+            scorer = AIScoringModel(config)
+            scored_stocks = scorer.score_all_signals(signals)
+            reasoning_map = {}
         
         # Get top stocks
         top_stocks = get_top_stocks(scored_stocks, min_score=60, limit=10)
@@ -138,6 +179,14 @@ def run_scan(config: dict, logger) -> dict:
                 if signal:
                     stock_info = fetcher.get_stock_info(score.stock_symbol)
                     setup = generator.generate_setup(score, signal, stock_info)
+                    
+                    # Add reasoning data if available
+                    if reasoning_map and score.stock_symbol in reasoning_map:
+                        reasoning = reasoning_map[score.stock_symbol]
+                        setup.rule_score = reasoning.rule_score
+                        setup.ai_score = reasoning.ai_score
+                        setup.reasoning_text = reasoning.reasoning_text
+                        setup.confidence_level = reasoning.confidence_level
                     
                     # Check if this is a new signal (using signal history)
                     if signal_history.is_new_signal(setup.stock_symbol, setup.current_price):
@@ -207,6 +256,13 @@ def run_scan(config: dict, logger) -> dict:
         logger.info("Sending Telegram alerts...")
         bot = TelegramBot(config)
         
+        # Initialize SIE Orchestrator if enabled
+        sie_orchestrator = None
+        sie_enabled = config.get('signal_intelligence', {}).get('enabled', True)
+        if sie_enabled:
+            sie_orchestrator = SIEOrchestrator(config, bot)
+            logger.info("SIE Orchestrator initialized")
+        
         if bot.is_configured():
             # Send individual alerts for above-threshold setups
             for setup in setups:
@@ -219,6 +275,10 @@ def run_scan(config: dict, logger) -> dict:
                         setup.target_1,
                         setup.confidence_score
                     )
+                    
+                    # Register signal with SIE
+                    if sie_orchestrator:
+                        sie_orchestrator.register_signal(setup)
             
             # Send summary for above-threshold
             bot.send_summary(setups)
@@ -290,6 +350,21 @@ def run_scheduled(config: dict, logger):
     
     scheduler.add_job(scan_job)
     
+    # Add signal monitoring job if SIE is enabled
+    sie_config = config.get('signal_intelligence', {})
+    if sie_config.get('enabled', True):
+        def monitor_job():
+            from src.intelligence.sie_orchestrator import SIEOrchestrator
+            from src.notifications.telegram_bot import TelegramBot
+            from src.data.data_fetcher import NSEDataFetcher
+            
+            fetcher = NSEDataFetcher(config)
+            bot = TelegramBot(config)
+            sie = SIEOrchestrator(config, bot)
+            sie.check_and_update_signals(fetcher)
+        
+        scheduler.add_monitor_job(monitor_job)
+    
     # Start scheduler
     scheduler.start()
     
@@ -335,6 +410,38 @@ def test_telegram(config: dict):
         return False
 
 
+def run_signal_monitor(config: dict, logger):
+    """
+    Run signal monitoring - check active signals for targets/stoploss
+    """
+    logger.info("Starting signal monitoring check...")
+    
+    # Initialize components
+    fetcher = NSEDataFetcher(config)
+    bot = TelegramBot(config)
+    
+    # Initialize SIE
+    sie_config = config.get('signal_intelligence', {})
+    if not sie_config.get('enabled', True):
+        logger.info("Signal Intelligence Engine is disabled")
+        return
+    
+    sie_orchestrator = SIEOrchestrator(config, bot)
+    
+    # Check signals
+    resolved = sie_orchestrator.check_and_update_signals(fetcher)
+    
+    if resolved:
+        logger.info(f"Resolved {len(resolved)} signals")
+    else:
+        logger.info("No signals resolved in this check")
+    
+    # Log current stats
+    metrics = sie_orchestrator.get_metrics()
+    logger.info(f"Active signals: {metrics.get('active_signals', 0)}")
+    logger.info(f"Accuracy rate: {metrics.get('accuracy_rate', 0)}%")
+
+
 def main():
     """Main entry point"""
     # Parse arguments
@@ -360,6 +467,11 @@ def main():
         '--config',
         default='config.yaml',
         help='Path to config file'
+    )
+    parser.add_argument(
+        '--monitor',
+        action='store_true',
+        help='Run signal monitoring (check active signals for targets/SL)'
     )
     
     args = parser.parse_args()
@@ -389,6 +501,12 @@ def main():
         else:
             print("ERROR: Telegram bot not configured!")
             sys.exit(1)
+        sys.exit(0)
+    
+    if args.monitor:
+        # Run signal monitoring
+        logger = setup_logging(config)
+        run_signal_monitor(config, logger)
         sys.exit(0)
         
     if args.schedule:

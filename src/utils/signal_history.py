@@ -72,8 +72,18 @@ class SignalHistory:
         if stock_symbol in self.history:
             prev_signal = self.history[stock_symbol]
             
-            # Check when it was last sent
-            last_sent = datetime.fromisoformat(prev_signal.get('last_sent', '2020-01-01'))
+            # Check when it was last sent - with error handling
+            try:
+                last_sent_str = prev_signal.get('last_sent')
+                if last_sent_str:
+                    last_sent = datetime.fromisoformat(last_sent_str)
+                else:
+                    # No valid timestamp, treat as new signal
+                    return True
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid timestamp for {stock_symbol}, treating as new signal: {e}")
+                return True
+            
             age = (now - last_sent).total_seconds() / 3600  # hours
             
             # If sent within max_age_hours, check if anything changed
@@ -138,9 +148,14 @@ class SignalHistory:
         
         cleaned = {}
         for symbol, data in self.history.items():
-            last_sent = datetime.fromisoformat(data.get('last_sent', '2020-01-01'))
-            if last_sent > cutoff:
-                cleaned[symbol] = data
+            try:
+                last_sent_str = data.get('last_sent')
+                if last_sent_str:
+                    last_sent = datetime.fromisoformat(last_sent_str)
+                    if last_sent > cutoff:
+                        cleaned[symbol] = data
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid timestamp for {symbol} during cleanup: {e}")
         
         if len(cleaned) != len(self.history):
             self.history = cleaned

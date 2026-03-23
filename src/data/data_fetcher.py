@@ -214,6 +214,20 @@ class NSEDataFetcher:
             stock = yf.Ticker(ticker)
             info = stock.info
             
+            # Get current price from fast_info or history
+            current_price = None
+            try:
+                # Try fast_info first (faster)
+                if hasattr(stock, 'fast_info') and stock.fast_info:
+                    current_price = stock.fast_info.get('last_price')
+                if not current_price:
+                    # Fallback to history
+                    hist = stock.history(period="5d", interval="1d")
+                    if not hist.empty:
+                        current_price = hist['close'].iloc[-1]
+            except Exception:
+                pass
+            
             return {
                 'symbol': symbol,
                 'name': info.get('longName', info.get('shortName', symbol)),
@@ -224,6 +238,7 @@ class NSEDataFetcher:
                 'pe_ratio': info.get('trailingPE'),
                 '52w_high': info.get('fiftyTwoWeekHigh'),
                 '52w_low': info.get('fiftyTwoWeekLow'),
+                'current_price': current_price
             }
             
         except Exception as e:

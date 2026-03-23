@@ -128,30 +128,74 @@ performance:
 # LLM Configuration (AI-powered analysis with automatic failover)
 # Set enabled: true to use AI for generating detailed analysis
 llm:
-  enabled: false  # Set to true to enable AI analysis
-  
+  enabled: false # Set to true to enable AI analysis
+
   # Primary/fallback provider preference
   # Order of failover: ollama -> minimax -> gemini -> anthropic -> openai
   # (free providers are tried first)
   provider: "openai"
-  
+
   # Model settings (optional - defaults shown)
   openai_model: "gpt-4o"
   anthropic_model: "claude-3-5-sonnet-20241022"
   gemini_model: "gemini-1.5-pro"
   minimax_model: "abab6.5s-chat"
   ollama_model: "llama2"
-  
+
   # Ollama URL (if running locally)
   ollama_url: "http://localhost:11434"
-  
+
   # API Keys - MUST be set via environment variables:
   # - OPENAI_API_KEY
-  # - ANTHROPIC_API_KEY  
+  # - ANTHROPIC_API_KEY
   # - GEMINI_API_KEY
   # - MINIMAX_API_KEY (free tier available at https://platform.minimax.io)
   # Or add them to .env file
-  
+
   # Rate limit recovery time (seconds)
   # How long to wait before retrying a rate-limited provider
   rate_limit_recovery_seconds: 300
+
+# Reasoning Engine Configuration (Hybrid AI + Rule-Based)
+reasoning:
+  enabled: true
+
+  # Hybrid scoring weights
+  hybrid_weights:
+    rule_based: 60 # % weight for rule-based score
+    ai_reasoning: 40 # % weight for AI score
+
+  # AI Reasoner settings
+  ai_reasoner:
+    enabled: true
+    min_confidence_threshold: 50 # Minimum AI score to trust
+
+  # Explanation settings
+  explanation:
+    include_in_telegram: true
+    max_length: 500 # characters
+
+# Signal Intelligence Engine (SIE) Configuration
+signal_intelligence:
+  enabled: true
+
+  # Monitoring settings
+  monitoring:
+    check_interval_minutes: 15
+    market_hours_only: true
+    max_signal_age_days: 30
+
+  # Learning settings
+  learning:
+    auto_adjust_weights: true
+    min_signals_for_adjustment: 20 # Minimum outcomes before weight change
+    max_monthly_adjustment: 5 # Maximum % adjustment per month
+    dampening_factor: 0.5 # Reduce adjustment impact
+
+  # Notification settings
+  notifications:
+    outcome_alerts: true
+    daily_summary: true
+    weekly_report: true
+    daily_summary_time: "16:00" # 4:00 PM IST
+    weekly_report_day: "saturday"

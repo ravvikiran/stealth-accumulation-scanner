@@ -58,6 +58,12 @@ class TradeSetup:
     
     # Signals
     signals: List[str]
+    
+    # Reasoning Engine Fields (optional)
+    rule_score: Optional[int] = None
+    ai_score: Optional[int] = None
+    reasoning_text: str = ""
+    confidence_level: str = "medium"
 
 
 class TradeSetupGenerator:
@@ -149,7 +155,11 @@ class TradeSetupGenerator:
             resistance_level=signal.resistance_level,
             range_height=signal.range_high - signal.range_low if signal.in_range else 0,
             atr_current=atr,
-            signals=signals
+            signals=signals,
+            rule_score=getattr(score, 'price_structure_score', score.total_score),
+            ai_score=getattr(score, 'ai_reasoning_score', None),
+            reasoning_text="",
+            confidence_level="medium"
         )
     
     def _calculate_entry(
