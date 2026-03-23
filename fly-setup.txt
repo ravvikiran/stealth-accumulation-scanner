@@ -1,34 +1,3 @@
-## Yes, Fly.io is 100% Free for Your Requirements
-
-### Fly.io Free Tier - What You Get
-
-| Resource | Free Allocation |
-|----------|-----------------|
-| **VMs** | 3 shared VMs |
-| **Storage** | 3 GB persistent volumes |
-| **Bandwidth** | 160 GB egress/month |
-| **Build minutes** | Free (with limitations) |
-
-### Will It Work for Your App?
-
-| Requirement | Fly.io Support |
-|-------------|----------------|
-| ✅ Always-on (24/7) | Yes - stays running |
-| ✅ Scheduler (runs at 3 PM) | Yes - no issues |
-| ✅ Telegram bot webhooks | Yes - public URL provided |
-| ✅ API calls to Yahoo Finance | Yes - outbound works fine |
-| ✅ Python dependencies | Yes - pip install works |
-
-### What You Pay: **$0**
-
-The 3 free VMs are enough for your scanner. As long as your app doesn't exceed:
-- 160 GB bandwidth/month
-- 3 GB storage
-
-You'll pay **nothing forever** (not just 12 months like AWS/GCP).
-
----
-
 ### Quick Setup (5 minutes)
 
 ```bash
