@@ -3,9 +3,13 @@ Trade Setup Generator
 Generates actionable trade setups with entry, stop loss, and targets
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING, Any
 from dataclasses import dataclass
 import logging
+
+# Import StockScore for type hints only (avoid circular imports)
+if TYPE_CHECKING:
+    from src.scoring.ai_scorer import StockScore
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +68,7 @@ class TradeSetup:
     ai_score: Optional[int] = None
     reasoning_text: str = ""
     confidence_level: str = "medium"
+    below_threshold: bool = False  # Track if signal is below score threshold
 
 
 class TradeSetupGenerator:
@@ -365,7 +370,7 @@ class TradeSetupGenerator:
     def generate_all_setups(
         self,
         scored_stocks: List['StockScore'],
-        signals: List,
+        signals: Dict[str, Any],
         fetcher
     ) -> List[TradeSetup]:
         """

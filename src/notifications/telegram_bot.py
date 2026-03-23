@@ -447,7 +447,7 @@ class TelegramBot:
         message = self.format_signal_message(page_signals, page_info)
         return self.send_message_to_chat(chat_id, message)
     
-    def handle_command(self, text: str, chat_id: str = None) -> bool:
+    def handle_command(self, text: str, chat_id: str) -> bool:
         """
         Handle Telegram commands and stock queries
         
@@ -458,7 +458,11 @@ class TelegramBot:
         Returns:
             True if response was sent
         """
-        target_chat = chat_id or self.chat_id
+        if not chat_id:
+            logger.warning("handle_command called without chat_id")
+            return False
+        
+        target_chat = chat_id
         
         # Check if it's a stock query
         stock_query = self._is_stock_query(text)
