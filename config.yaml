@@ -80,16 +80,17 @@ telegram:
 scheduler:
   timezone: "Asia/Kolkata"
 
-  # Scan every 15 minutes
-  interval_minutes: 15
+  # Run daily at 3:00 PM IST (single scan per day)
+  scan_time_hour: 15
+  scan_time_minute: 0
+
+  run_days: [1, 2, 3, 4, 5]  # Monday to Friday (0=Monday, 5=Sunday)
 
   # Market hours (9:15 AM to 3:30 PM IST)
   market_open_hour: 9
   market_open_minute: 15
   market_close_hour: 15
   market_close_minute: 30
-
-  run_days: [1, 2, 3, 4, 5] # Monday to Friday
 
 # Data Source Configuration
 data:

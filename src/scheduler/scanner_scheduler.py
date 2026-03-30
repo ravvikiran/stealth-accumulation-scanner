@@ -1,13 +1,13 @@
 """
 Scanner Scheduler
-Runs the accumulation scanner every 15 minutes during market hours
+Runs the accumulation scanner at a specific time on weekdays
 """
 
 import logging
 from datetime import datetime
 from typing import Callable, Optional
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.executors.pool import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class ScannerScheduler:
     """
-    Scheduler for running the accumulation scanner every 15 minutes
+    Scheduler for running the accumulation scanner daily at a specific time
     """
     
     def __init__(self, config: dict):
@@ -25,18 +25,16 @@ class ScannerScheduler:
         # Configure scheduler
         self.timezone = self.scheduler_config.get('timezone', 'Asia/Kolkata')
         
-        # Get interval in minutes
-        self.interval_minutes = self.scheduler_config.get('interval_minutes', 15)
+        # Get scan time (default 3:00 PM IST)
+        self.scan_hour = self.scheduler_config.get('scan_time_hour', 15)
+        self.scan_minute = self.scheduler_config.get('scan_time_minute', 0)
         
-        # Market hours
-        self.market_open_hour = self.scheduler_config.get('market_open_hour', 9)
-        self.market_open_minute = self.scheduler_config.get('market_open_minute', 15)
-        self.market_close_hour = self.scheduler_config.get('market_close_hour', 15)
-        self.market_close_minute = self.scheduler_config.get('market_close_minute', 30)
+        # Run days: Monday=0, Tuesday=1, ..., Friday=4
+        self.run_days = self.scheduler_config.get('run_days', [1, 2, 3, 4, 5])
         
         # Configure executors
         executors = {
-            'default': ThreadPoolExecutor(max_workers=1)
+            'default': ThreadPoolExecutor(max_workers=2)
         }
         
         # Create scheduler
@@ -55,9 +53,11 @@ class ScannerScheduler:
             func: Function to run
             job_id: Unique job identifier
         """
-        # Use interval trigger for every 15 minutes
-        trigger = IntervalTrigger(
-            minutes=self.interval_minutes,
+        # Use CronTrigger for specific time on specific days
+        trigger = CronTrigger(
+            hour=self.scan_hour,
+            minute=self.scan_minute,
+            day_of_week=self.run_days,
             timezone=self.timezone
         )
         
@@ -65,11 +65,11 @@ class ScannerScheduler:
             func,
             trigger=trigger,
             id=job_id,
-            name='Accumulation Scanner (Every 15 min)',
+            name=f'Accumulation Scanner (Daily at {self.scan_hour}:{self.scan_minute:02d} IST)',
             replace_existing=True
         )
         
-        logger.info(f"Scanner job scheduled: every {self.interval_minutes} minutes during market hours")
+        logger.info(f"Scanner job scheduled: {self.scan_hour}:{self.scan_minute:02d} IST on days {self.run_days}")
         
     def start(self) -> None:
         """
@@ -77,7 +77,7 @@ class ScannerScheduler:
         """
         if not self.scheduler.running:
             self.scheduler.start()
-            logger.info("Scheduler started - running every 15 minutes")
+            logger.info(f"Scheduler started - running at {self.scan_hour}:{self.scan_minute:02d} IST on Mon-Fri")
             
     def stop(self) -> None:
         """
@@ -109,7 +109,8 @@ class ScannerScheduler:
             'running': self.scheduler.running,
             'next_run': self.get_next_run(),
             'job_id': self.job.id if self.job else None,
-            'interval_minutes': self.interval_minutes
+            'scan_time': f'{self.scan_hour}:{self.scan_minute:02d}',
+            'run_days': self.run_days
         }
     
     def add_monitor_job(self, func: Callable, job_id: str = 'monitor_job') -> None:
@@ -124,6 +125,7 @@ class ScannerScheduler:
         sie_config = self.config.get('signal_intelligence', {})
         monitor_interval = sie_config.get('monitoring', {}).get('check_interval_minutes', 15)
         
+        from apscheduler.triggers.interval import IntervalTrigger
         trigger = IntervalTrigger(
             minutes=monitor_interval,
             timezone=self.timezone
@@ -153,18 +155,22 @@ def create_scheduler(config: dict) -> ScannerScheduler:
     return ScannerScheduler(config)
 
 
-# Interval trigger helper for manual scheduling
-def create_interval_trigger(minutes: int = 15) -> IntervalTrigger:
+# CronTrigger helper for manual scheduling
+def create_cron_trigger(hour: int = 15, minute: int = 0, day_of_week: str = 'mon-fri'):
     """
-    Create an interval trigger
+    Create a CronTrigger for specific time and days
     
     Args:
-        minutes: Interval in minutes
+        hour: Hour (0-23)
+        minute: Minute (0-59)
+        day_of_week: Day of week (e.g., 'mon-fri', '0-4')
         
     Returns:
-        IntervalTrigger instance
+        CronTrigger instance
     """
-    return IntervalTrigger(
-        minutes=minutes,
+    return CronTrigger(
+        hour=hour,
+        minute=minute,
+        day_of_week=day_of_week,
         timezone='Asia/Kolkata'
     )

@@ -17,6 +17,7 @@ Usage:
 import sys
 import logging
 import argparse
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -338,13 +339,13 @@ def run_scan(config: dict, logger) -> dict:
 
 def run_scheduled(config: dict, logger):
     """
-    Run the scanner with scheduler
+    Run the scanner with scheduler and Telegram bot (both running together)
     
     Args:
         config: Configuration dictionary
         logger: Logger instance
     """
-    logger.info("Initializing scheduler...")
+    logger.info("Initializing scheduler and Telegram bot...")
     
     # Create scheduler
     scheduler = ScannerScheduler(config)
@@ -374,6 +375,19 @@ def run_scheduled(config: dict, logger):
     scheduler.start()
     
     logger.info(f"Scheduler running. Next scan: {scheduler.get_next_run()}")
+    
+    # Start Telegram bot in polling mode (in a separate thread)
+    bot = TelegramBot(config)
+    bot_thread = None
+    
+    if bot.is_configured():
+        logger.info("Starting Telegram bot in polling mode...")
+        bot_thread = threading.Thread(target=bot.start_polling, daemon=True)
+        bot_thread.start()
+    else:
+        logger.warning("Telegram bot not configured - polling not started")
+    
+    logger.info("System running. Scanner at 3 PM Mon-Fri, bot responding to commands.")
     logger.info("Press Ctrl+C to stop")
     
     try:
@@ -381,7 +395,7 @@ def run_scheduled(config: dict, logger):
         import time
         while True:
             time.sleep(60)
-            logger.info(f"Next scan: {scheduler.get_next_run()}")
+            logger.debug(f"Next scan: {scheduler.get_next_run()}")
     except KeyboardInterrupt:
         logger.info("Shutting down...")
         scheduler.stop()
@@ -456,7 +470,7 @@ def main():
     parser.add_argument(
         '--schedule',
         action='store_true',
-        help='Run with scheduler (daily at 3 PM)'
+        help='Run with scheduler (daily at 3 PM Mon-Fri) + Telegram bot'
     )
     parser.add_argument(
         '--test',
