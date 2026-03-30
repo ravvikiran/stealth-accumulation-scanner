@@ -42,12 +42,17 @@ def setup_logging(config: dict):
     level = getattr(logging, log_config.get('level', 'INFO'))
     log_format = log_config.get('format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     
+    # Create logs directory if it doesn't exist
+    log_file = log_config.get('file', 'logs/scanner.log')
+    log_path = Path(log_file)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    
     logging.basicConfig(
         level=level,
         format=log_format,
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler(log_config.get('file', 'logs/scanner.log'))
+            logging.FileHandler(log_file)
         ]
     )
     
