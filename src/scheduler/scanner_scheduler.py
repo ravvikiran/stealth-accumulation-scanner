@@ -53,11 +53,18 @@ class ScannerScheduler:
             func: Function to run
             job_id: Unique job identifier
         """
+        # Convert run_days list to comma-separated string for APScheduler
+        # APScheduler expects string like "0,1,2,3,4" or "mon-tue" etc.
+        if isinstance(self.run_days, list):
+            day_of_week = ','.join(str(day) for day in self.run_days)
+        else:
+            day_of_week = str(self.run_days)
+        
         # Use CronTrigger for specific time on specific days
         trigger = CronTrigger(
             hour=self.scan_hour,
             minute=self.scan_minute,
-            day_of_week=self.run_days,
+            day_of_week=day_of_week,
             timezone=self.timezone
         )
         
