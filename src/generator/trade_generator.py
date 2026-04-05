@@ -60,6 +60,8 @@ class TradeSetup:
     range_low: float
     range_high: float
     range_height: float
+    near_breakout: bool
+    breakout_distance_pct: float
     atr_current: float
     
     # Signals
@@ -163,6 +165,8 @@ class TradeSetupGenerator:
             range_low=signal.range_low if signal.in_range else 0,
             range_high=signal.range_high if signal.in_range else 0,
             range_height=signal.range_high - signal.range_low if signal.in_range else 0,
+            near_breakout=signal.near_breakout if hasattr(signal, 'near_breakout') else False,
+            breakout_distance_pct=getattr(signal, 'breakout_distance_pct', 0) if hasattr(signal, 'near_breakout') and signal.near_breakout else 0,
             atr_current=atr,
             signals=signals,
             rule_score=getattr(score, 'price_structure_score', score.total_score),

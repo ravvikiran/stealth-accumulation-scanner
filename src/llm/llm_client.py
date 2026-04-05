@@ -157,9 +157,8 @@ class GeminiClient(BaseLLMClient):
         
         if self.api_key:
             try:
-                import google.genai as genai
-                genai.configure(api_key=self.api_key)
-                self.client = genai
+                from google.genai import Client
+                self.client = Client(api_key=self.api_key)
                 logger.info("Gemini client initialized successfully")
             except ImportError:
                 logger.warning("Google GenAI package not installed. Install with: pip install google-genai")
@@ -175,7 +174,7 @@ class GeminiClient(BaseLLMClient):
             return None
         
         try:
-            model = self.client.models.generate(
+            response = self.client.models.generate(
                 model=self.model,
                 contents=f"System: {system_prompt}\n\nUser: {user_prompt}",
                 config={
@@ -183,7 +182,7 @@ class GeminiClient(BaseLLMClient):
                     'max_output_tokens': 2000
                 }
             )
-            return model.text if hasattr(model, 'text') else str(model)
+            return response.text if hasattr(response, 'text') else str(response)
         except Exception as e:
             error_str = str(e).lower()
             if 'rate limit' in error_str or 'quota' in error_str or '429' in error_str or 'resource_exhausted' in error_str:
