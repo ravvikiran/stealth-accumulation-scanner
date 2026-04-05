@@ -57,6 +57,8 @@ class TradeSetup:
     # Technical Details
     support_level: float
     resistance_level: float
+    range_low: float
+    range_high: float
     range_height: float
     atr_current: float
     
@@ -158,6 +160,8 @@ class TradeSetupGenerator:
             risk_level=risk_level,
             support_level=signal.support_level,
             resistance_level=signal.resistance_level,
+            range_low=signal.range_low if signal.in_range else 0,
+            range_high=signal.range_high if signal.in_range else 0,
             range_height=signal.range_high - signal.range_low if signal.in_range else 0,
             atr_current=atr,
             signals=signals,

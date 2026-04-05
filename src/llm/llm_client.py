@@ -157,12 +157,12 @@ class GeminiClient(BaseLLMClient):
         
         if self.api_key:
             try:
-                import google.generativeai as genai
+                import google.genai as genai
                 genai.configure(api_key=self.api_key)
                 self.client = genai
                 logger.info("Gemini client initialized successfully")
             except ImportError:
-                logger.warning("Google Generative AI package not installed. Install with: pip install google-generativeai")
+                logger.warning("Google GenAI package not installed. Install with: pip install google-genai")
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini client: {e}")
     
@@ -175,18 +175,17 @@ class GeminiClient(BaseLLMClient):
             return None
         
         try:
-            model = self.client.GenerativeModel(self.model)
-            response = model.generate_content(
+            model = self.client.models.generate(
+                model=self.model,
                 contents=f"System: {system_prompt}\n\nUser: {user_prompt}",
-                generation_config={
+                config={
                     'temperature': 0.7,
                     'max_output_tokens': 2000
                 }
             )
-            return response.text
+            return model.text if hasattr(model, 'text') else str(model)
         except Exception as e:
             error_str = str(e).lower()
-            # Check for rate limit or quota errors
             if 'rate limit' in error_str or 'quota' in error_str or '429' in error_str or 'resource_exhausted' in error_str:
                 logger.warning(f"Gemini rate limit/quota exceeded: {e}")
                 raise RateLimitError('gemini', retry_after=60)
@@ -280,10 +279,10 @@ class OllamaClient(BaseLLMClient):
                 if response.status_code == 200:
                     logger.info(f"Ollama client initialized successfully at {self.base_url}")
                 else:
-                    logger.warning(f"Ollama not responding at {self.base_url}")
+                    logger.debug(f"Ollama not responding at {self.base_url}")
                     self.client = None
             except Exception as e:
-                logger.warning(f"Cannot connect to Ollama at {self.base_url}: {e}")
+                logger.debug(f"Cannot connect to Ollama at {self.base_url}: {e}")
                 self.client = None
         except ImportError:
             logger.warning("Requests package not installed.")
