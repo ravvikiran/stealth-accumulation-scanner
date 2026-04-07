@@ -4,67 +4,86 @@ Runs the accumulation scanner at a specific time on weekdays
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, time
 from typing import Callable, Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.executors.pool import ThreadPoolExecutor
+import pytz
 
 logger = logging.getLogger(__name__)
 
 
+def is_market_open(config: dict) -> bool:
+    """
+    Check if current time is within market hours
+    
+    Args:
+        config: Configuration dictionary
+        
+    Returns:
+        True if market is open, False otherwise
+    """
+    scheduler_config = config.get('scheduler', {})
+    
+    tz = pytz.timezone(scheduler_config.get('timezone', 'Asia/Kolkata'))
+    now = datetime.now(tz)
+    
+    market_open_hour = scheduler_config.get('market_open_hour', 9)
+    market_open_minute = scheduler_config.get('market_open_minute', 15)
+    market_close_hour = scheduler_config.get('market_close_hour', 15)
+    market_close_minute = scheduler_config.get('market_close_minute', 30)
+    run_days = scheduler_config.get('run_days', [1, 2, 3, 4, 5])
+    
+    current_time = now.time()
+    current_day = now.weekday()
+    
+    open_time = time(market_open_hour, market_open_minute)
+    close_time = time(market_close_hour, market_close_minute)
+    
+    is_weekday = current_day in run_days
+    is_market_hours = open_time <= current_time <= close_time
+    
+    return is_weekday and is_market_hours
+
+
 class ScannerScheduler:
     """
-    Scheduler for running the accumulation scanner daily at a specific time
+    Scheduler for running the accumulation scanner hourly during market hours
+    Also runs an immediate scan on deploy
     """
     
     def __init__(self, config: dict):
         self.config = config
         self.scheduler_config = config.get('scheduler', {})
         
-        # Configure scheduler
         self.timezone = self.scheduler_config.get('timezone', 'Asia/Kolkata')
         
-        # Get scan time (default 3:00 PM IST)
-        self.scan_hour = self.scheduler_config.get('scan_time_hour', 15)
-        self.scan_minute = self.scheduler_config.get('scan_time_minute', 0)
+        self.scan_interval_hours = self.scheduler_config.get('scan_interval_hours', 1)
+        self.scan_on_deploy = self.scheduler_config.get('scan_on_deploy', True)
         
-        # Run days: Monday=0, Tuesday=1, ..., Friday=4
         self.run_days = self.scheduler_config.get('run_days', [1, 2, 3, 4, 5])
         
-        # Configure executors
         executors = {
             'default': ThreadPoolExecutor(max_workers=2)
         }
         
-        # Create scheduler
         self.scheduler = BackgroundScheduler(
             executors=executors,
             timezone=self.timezone
         )
         
         self.job = None
+        self.has_run_initial = False
         
     def add_job(self, func: Callable, job_id: str = 'scanner_job') -> None:
         """
-        Add the scanner job to the scheduler
-        
-        Args:
-            func: Function to run
-            job_id: Unique job identifier
+        Add the scanner job to the scheduler - runs hourly during market hours
         """
-        # Convert run_days list to comma-separated string for APScheduler
-        # APScheduler expects string like "0,1,2,3,4" or "mon-tue" etc.
-        if isinstance(self.run_days, list):
-            day_of_week = ','.join(str(day) for day in self.run_days)
-        else:
-            day_of_week = str(self.run_days)
+        from apscheduler.triggers.interval import IntervalTrigger
         
-        # Use CronTrigger for specific time on specific days
-        trigger = CronTrigger(
-            hour=self.scan_hour,
-            minute=self.scan_minute,
-            day_of_week=day_of_week,
+        trigger = IntervalTrigger(
+            hours=self.scan_interval_hours,
             timezone=self.timezone
         )
         
@@ -72,19 +91,43 @@ class ScannerScheduler:
             func,
             trigger=trigger,
             id=job_id,
-            name=f'Accumulation Scanner (Daily at {self.scan_hour}:{self.scan_minute:02d} IST)',
+            name=f'Accumulation Scanner (Every {self.scan_interval_hours}h during market hours)',
             replace_existing=True
         )
         
-        logger.info(f"Scanner job scheduled: {self.scan_hour}:{self.scan_minute:02d} IST on days {self.run_days}")
+        logger.info(f"Scanner job scheduled: every {self.scan_interval_hours} hour(s)")
         
-    def start(self) -> None:
+    def should_run_scan(self) -> bool:
+        """
+        Check if scan should run based on market hours
+        
+        Returns:
+            True if scan should run, False otherwise
+        """
+        return is_market_open(self.config)
+        
+    def start(self, run_immediate: bool = True) -> None:
         """
         Start the scheduler
+        
+        Args:
+            run_immediate: If True, run scan immediately on deploy
         """
         if not self.scheduler.running:
             self.scheduler.start()
-            logger.info(f"Scheduler started - running at {self.scan_hour}:{self.scan_minute:02d} IST on Mon-Fri")
+            
+            if run_immediate and self.scan_on_deploy and not self.has_run_initial:
+                logger.info("Running immediate scan on deploy...")
+                from main import run_scan, setup_logging
+                
+                logger_obj = setup_logging(self.config)
+                try:
+                    run_scan(self.config, logger_obj)
+                    self.has_run_initial = True
+                except Exception as e:
+                    logger.error(f"Immediate scan failed: {e}")
+            
+            logger.info(f"Scheduler started - scanning every {self.scan_interval_hours}h during market hours")
             
     def stop(self) -> None:
         """
@@ -116,8 +159,10 @@ class ScannerScheduler:
             'running': self.scheduler.running,
             'next_run': self.get_next_run(),
             'job_id': self.job.id if self.job else None,
-            'scan_time': f'{self.scan_hour}:{self.scan_minute:02d}',
-            'run_days': self.run_days
+            'scan_interval_hours': self.scan_interval_hours,
+            'scan_on_deploy': self.scan_on_deploy,
+            'run_days': self.run_days,
+            'market_open': is_market_open(self.config)
         }
     
     def add_monitor_job(self, func: Callable, job_id: str = 'monitor_job') -> None:

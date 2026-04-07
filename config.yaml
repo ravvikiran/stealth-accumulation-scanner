@@ -76,14 +76,17 @@ telegram:
   alert_threshold: 60 # Only send alerts for scores >= 60
   min_signals_per_scan: 2 # Minimum signals to send (pad with lower scores if needed)
 
-# Scheduler Configuration - Runs every 15 minutes during market hours
+# Scheduler Configuration - Runs hourly during market hours + immediate scan on deploy
 scheduler:
   timezone: "Asia/Kolkata"
 
-  # Run daily at 3:00 PM IST (single scan per day)
-  scan_time_hour: 15
-  scan_time_minute: 0
+  # Scan on deployment (immediate scan when app starts)
+  scan_on_deploy: true
 
+  # Hourly scanning during market hours (9:15 AM to 3:30 PM IST)
+  scan_interval_hours: 1
+
+  # Run days: Monday=0, Tuesday=1, ..., Friday=4
   run_days: [1, 2, 3, 4, 5]  # Monday to Friday (0=Monday, 5=Sunday)
 
   # Market hours (9:15 AM to 3:30 PM IST)

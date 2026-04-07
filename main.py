@@ -350,9 +350,14 @@ def run_scheduled(config: dict, logger):
     # Create scheduler
     scheduler = ScannerScheduler(config)
     
-    # Add the scan job
+    # Add the scan job - checks market hours before running (skip if outside market hours)
     def scan_job():
-        run_scan(config, logger)
+        from src.scheduler.scanner_scheduler import is_market_open
+        if is_market_open(config):
+            logger.info("Market is open - running scheduled scan")
+            run_scan(config, logger)
+        else:
+            logger.info("Market is closed - skipping scheduled scan")
     
     scheduler.add_job(scan_job)
     
@@ -372,7 +377,7 @@ def run_scheduled(config: dict, logger):
         scheduler.add_monitor_job(monitor_job)
     
     # Start scheduler
-    scheduler.start()
+    scheduler.start(run_immediate=True)
     
     logger.info(f"Scheduler running. Next scan: {scheduler.get_next_run()}")
     
@@ -387,7 +392,7 @@ def run_scheduled(config: dict, logger):
     else:
         logger.warning("Telegram bot not configured - polling not started")
     
-    logger.info("System running. Scanner at 3 PM Mon-Fri, bot responding to commands.")
+    logger.info("System running. Scanner hourly during market hours + on deploy, bot responding to commands.")
     logger.info("Press Ctrl+C to stop")
     
     try:
