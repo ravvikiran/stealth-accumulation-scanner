@@ -35,6 +35,7 @@ class TelegramBot:
         self.enabled = telegram_config.get('enabled', True)
         self.bot_token = telegram_config.get('bot_token', '')
         self.chat_id = telegram_config.get('chat_id', '')
+        self.channel_chat_id = telegram_config.get('channel_chat_id', '')
         self.alert_threshold = telegram_config.get('alert_threshold', 60)
         
         self.api_url = f"https://api.telegram.org/bot{self.bot_token}"
@@ -498,31 +499,34 @@ class TelegramBot:
         page_size = 5
         
         if command == '/start' or command == '/help':
-            message = """🤖 *Stealth Accumulation Scanner*
+            message = """🚀 *NSE Trend Checker Bot*
 
-I send you stock accumulation signals daily. Use these commands:
+Daily stock accumulation signals for NSE stocks.
 
-• /signals - Show current signals (5 at a time)
-• /next - Next 5 signals
-• /prev - Previous 5 signals
-• /analyze SYMBOL - Analyze a specific stock
-• /refresh - Run a new scan
-• /help - Show this help
+*Commands:*
+• /start - 🚀 Start & get daily signals
+• /help - 📘 View all commands
+• /today - 📊 Get today's stock signals
+• /next - ➡️ Next set of opportunities
+• /stock SYMBOL - 🔍 Full analysis (e.g., /stock INFY)
+• /buy SYMBOL - 🟢 Check BUY signal (e.g., /buy INFY)
+• /sell SYMBOL - 🔴 Check SELL signal (e.g., /sell INFY)
+• /watchlist - ⭐ View tracked stocks
+• /add SYMBOL - ➕ Add to watchlist
+• /remove SYMBOL - ❌ Remove from watchlist
+• /subscribe - 🔔 Enable daily alerts
+• /unsubscribe - 🔕 Disable daily alerts
 
-*Examples:*
-• Send `RELIANCE` to analyze that stock
-• Send `TCS` to get analysis
-• Send `signals` to see current signals
-
-*Note:* Run `python main.py` first to generate signals!"""
+*Quick Tip:* Just send a stock symbol (e.g., RELIANCE) to analyze it!
+"""
             return self.send_message_to_chat(target_chat, message)
         
-        elif command == '/signals' or command == '/current':
+        elif command == '/today':
             return self._handle_signals_request(target_chat, page=0)
         
         elif command == '/next':
             if not signals:
-                return self.send_message_to_chat(target_chat, "No signals available.")
+                return self.send_message_to_chat(target_chat, "📭 No signals available. Run a scan first!")
             
             total_pages = (len(signals) - 1) // page_size + 1
             
@@ -545,7 +549,7 @@ I send you stock accumulation signals daily. Use these commands:
         
         elif command == '/prev':
             if not signals:
-                return self.send_message_to_chat(target_chat, "No signals available.")
+                return self.send_message_to_chat(target_chat, "📭 No signals available.")
             
             if current_page > 0:
                 current_page -= 1
@@ -564,6 +568,89 @@ I send you stock accumulation signals daily. Use these commands:
             
             message = self.format_signal_message(page_signals, page_info)
             return self.send_message_to_chat(target_chat, message)
+        
+        elif command == '/watchlist':
+            watchlist = cache.get('watchlist', [])
+            if not watchlist:
+                return self.send_message_to_chat(target_chat, "⭐ Your watchlist is empty.\n\nUse /add SYMBOL to add stocks.")
+            
+            msg = "⭐ *Your Watchlist:*\n\n"
+            for sym in watchlist:
+                msg += f"• {sym}\n"
+            return self.send_message_to_chat(target_chat, msg)
+        
+        elif command.startswith('/add '):
+            parts = command.split()
+            if len(parts) > 1:
+                symbol = parts[1].upper()
+                watchlist = cache.get('watchlist', [])
+                if symbol not in watchlist:
+                    watchlist.append(symbol)
+                    cache['watchlist'] = watchlist
+                    self._save_cache(cache)
+                    return self.send_message_to_chat(target_chat, f"✅ Added {symbol} to watchlist!")
+                else:
+                    return self.send_message_to_chat(target_chat, f"ℹ️ {symbol} already in watchlist")
+            return self.send_message_to_chat(target_chat, "Usage: /add SYMBOL")
+        
+        elif command.startswith('/remove '):
+            parts = command.split()
+            if len(parts) > 1:
+                symbol = parts[1].upper()
+                watchlist = cache.get('watchlist', [])
+                if symbol in watchlist:
+                    watchlist.remove(symbol)
+                    cache['watchlist'] = watchlist
+                    self._save_cache(cache)
+                    return self.send_message_to_chat(target_chat, f"❌ Removed {symbol} from watchlist!")
+                else:
+                    return self.send_message_to_chat(target_chat, f"ℹ️ {symbol} not in watchlist")
+            return self.send_message_to_chat(target_chat, "Usage: /remove SYMBOL")
+        
+        elif command == '/subscribe':
+            cache['subscribed'] = True
+            self._save_cache(cache)
+            return self.send_message_to_chat(target_chat, "🔔 Daily alerts enabled! You'll receive signals at 3PM.")
+        
+        elif command == '/unsubscribe':
+            cache['subscribed'] = False
+            self._save_cache(cache)
+            return self.send_message_to_chat(target_chat, "🔕 Daily alerts disabled.")
+        
+        elif command.startswith('/stock '):
+            parts = command.split()
+            if len(parts) > 1:
+                symbol = parts[1].upper()
+                message = self.analyze_stock(symbol)
+                if message:
+                    return self.send_message_to_chat(target_chat, message)
+                else:
+                    return self.send_message_to_chat(target_chat, f"❌ Could not analyze {symbol}")
+            return self.send_message_to_chat(target_chat, "Usage: /stock SYMBOL\nExample: /stock INFY")
+        
+        elif command.startswith('/buy '):
+            parts = command.split()
+            if len(parts) > 1:
+                symbol = parts[1].upper()
+                message = self.analyze_stock(symbol)
+                if message:
+                    msg = f"🟢 *BUY Check: {symbol}*\n\n" + message
+                    return self.send_message_to_chat(target_chat, msg)
+                else:
+                    return self.send_message_to_chat(target_chat, f"❌ Could not analyze {symbol}")
+            return self.send_message_to_chat(target_chat, "Usage: /buy SYMBOL")
+        
+        elif command.startswith('/sell '):
+            parts = command.split()
+            if len(parts) > 1:
+                symbol = parts[1].upper()
+                message = self.analyze_stock(symbol)
+                if message:
+                    msg = f"🔴 *SELL Check: {symbol}*\n\n" + message
+                    return self.send_message_to_chat(target_chat, msg)
+                else:
+                    return self.send_message_to_chat(target_chat, f"❌ Could not analyze {symbol}")
+            return self.send_message_to_chat(target_chat, "Usage: /sell SYMBOL")
         
         elif command == '/refresh':
             message = "🔄 To refresh signals, please run `python main.py` on your server/PC.\n\nThis bot receives signals after each scan completes."
@@ -663,7 +750,7 @@ I send you stock accumulation signals daily. Use these commands:
             
         from src.generator.trade_generator import format_telegram_alert
         
-        message = format_telegram_alert(setup)
+        message = format_telegram_alert(setup, is_below_threshold)
         
         # Add reasoning information if available
         reasoning_config = self.config.get('reasoning', {})
@@ -689,7 +776,9 @@ I send you stock accumulation signals daily. Use these commands:
                 1
             )
         
-        return self.send_message(message)
+        # Send to channel if configured, otherwise to personal chat
+        target_id = self.channel_chat_id if self.channel_chat_id else self.chat_id
+        return self.send_message_to_chat(target_id, message)
     
     def send_alerts(self, setups: List) -> Dict:
         """
@@ -725,7 +814,7 @@ I send you stock accumulation signals daily. Use these commands:
         
         return results
     
-    def send_summary(self, setups: List, scan_time: str = None) -> bool:
+    def send_summary(self, setups: List, scan_time: Optional[str] = None) -> bool:
         """
         Send a summary of all scans
         
@@ -737,12 +826,14 @@ I send you stock accumulation signals daily. Use these commands:
             True if successful, False otherwise
         """
         if not setups:
-            message = "📊 Daily Accumulation Scanner\n\nNo accumulation setups found today."
+            message = "📊 *Daily Scan Complete*\n\nNo stocks met the confidence threshold (60+) today."
         else:
             from src.generator.trade_generator import format_summary_alert
             message = format_summary_alert(setups)
-            
-        return self.send_message(message)
+        
+        # Send to channel if configured, otherwise to personal chat
+        target_id = self.channel_chat_id if self.channel_chat_id else self.chat_id
+        return self.send_message_to_chat(target_id, message)
     
     def test_connection(self) -> bool:
         """

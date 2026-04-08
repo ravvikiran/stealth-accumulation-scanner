@@ -59,7 +59,7 @@ class ScannerScheduler:
         
         self.timezone = self.scheduler_config.get('timezone', 'Asia/Kolkata')
         
-        self.scan_interval_hours = self.scheduler_config.get('scan_interval_hours', 1)
+        self.scan_interval_minutes = self.scheduler_config.get('scan_interval_minutes', 15)
         self.scan_on_deploy = self.scheduler_config.get('scan_on_deploy', True)
         
         self.run_days = self.scheduler_config.get('run_days', [1, 2, 3, 4, 5])
@@ -78,12 +78,12 @@ class ScannerScheduler:
         
     def add_job(self, func: Callable, job_id: str = 'scanner_job') -> None:
         """
-        Add the scanner job to the scheduler - runs hourly during market hours
+        Add the scanner job to the scheduler - runs every 15 minutes during market hours
         """
         from apscheduler.triggers.interval import IntervalTrigger
         
         trigger = IntervalTrigger(
-            hours=self.scan_interval_hours,
+            minutes=self.scan_interval_minutes,
             timezone=self.timezone
         )
         
@@ -91,11 +91,11 @@ class ScannerScheduler:
             func,
             trigger=trigger,
             id=job_id,
-            name=f'Accumulation Scanner (Every {self.scan_interval_hours}h during market hours)',
+            name=f'Accumulation Scanner (Every {self.scan_interval_minutes}min during market hours)',
             replace_existing=True
         )
         
-        logger.info(f"Scanner job scheduled: every {self.scan_interval_hours} hour(s)")
+        logger.info(f"Scanner job scheduled: every {self.scan_interval_minutes} minute(s)")
         
     def should_run_scan(self) -> bool:
         """
@@ -127,7 +127,7 @@ class ScannerScheduler:
                 except Exception as e:
                     logger.error(f"Immediate scan failed: {e}")
             
-            logger.info(f"Scheduler started - scanning every {self.scan_interval_hours}h during market hours")
+            logger.info(f"Scheduler started - scanning every {self.scan_interval_minutes}min during market hours")
             
     def stop(self) -> None:
         """
@@ -159,7 +159,7 @@ class ScannerScheduler:
             'running': self.scheduler.running,
             'next_run': self.get_next_run(),
             'job_id': self.job.id if self.job else None,
-            'scan_interval_hours': self.scan_interval_hours,
+            'scan_interval_minutes': self.scan_interval_minutes,
             'scan_on_deploy': self.scan_on_deploy,
             'run_days': self.run_days,
             'market_open': is_market_open(self.config)

@@ -394,6 +394,7 @@ def load_config(config_path: str = "config.yaml") -> Dict:
         import os
         bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
         chat_id = os.getenv('TELEGRAM_CHAT_ID')
+        channel_chat_id = os.getenv('TELEGRAM_CHANNEL_ID')
         alert_threshold = os.getenv('TELEGRAM_ALERT_THRESHOLD')
         
         if 'telegram' not in config:
@@ -403,6 +404,8 @@ def load_config(config_path: str = "config.yaml") -> Dict:
             config['telegram']['bot_token'] = bot_token
         if chat_id:
             config['telegram']['chat_id'] = chat_id
+        if channel_chat_id:
+            config['telegram']['channel_chat_id'] = channel_chat_id
         if alert_threshold:
             config['telegram']['alert_threshold'] = int(alert_threshold)
         

@@ -4,7 +4,7 @@ Part of the Reasoning Engine
 """
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -15,69 +15,53 @@ logger = logging.getLogger(__name__)
 class ReasoningResult:
     """Result from the hybrid reasoning engine"""
     stock_symbol: str
-    total_score: int  # Combined score 0-100
-    rule_score: int  # Rule-based score 0-100
-    ai_score: Optional[int]  # AI-based score 0-100 (None if unavailable)
-    confidence_level: str  # 'high', 'medium', 'low'
-    reasoning_text: str  # Human-readable explanation
+    total_score: int
+    rule_score: int
+    ai_score: Optional[int]
+    confidence_level: str
+    reasoning_text: str
     positive_factors: List[str]
     negative_factors: List[str]
-    ai_insights: List[str]  # AI-specific observations
+    ai_insights: List[str]
     timestamp: str
+    rank_score: float = 0.0
+    classification: str = "Ignore"
+    recommendation: str = "Skip"
+    factor_scores: Optional[Dict[str, int]] = None
 
 
 class HybridScorer:
     """
-    Hybrid scoring engine combining rule-based algorithms with AI reasoning
+    Hybrid scoring engine combining rule-based algorithms with AI reasoning.
+    Rule-based score remains primary; AI adds explanation/context.
     """
-    
+
     def __init__(self, config: Dict):
         self.config = config
         reasoning_config = config.get('reasoning', {})
-        
-        # Enable/disable reasoning engine
+
         self.enabled = reasoning_config.get('enabled', True)
-        
-        # Hybrid weights
-        hybrid_weights = reasoning_config.get('hybrid_weights', {})
-        self.rule_weight = hybrid_weights.get('rule_based', 60) / 100
-        self.ai_weight = hybrid_weights.get('ai_reasoning', 40) / 100
-        
-        # Validate weights sum to 1.0
-        total_weight = self.rule_weight + self.ai_weight
-        if abs(total_weight - 1.0) > 0.01:
-            logger.warning(f"Hybrid weights sum to {total_weight:.2f}, normalizing to 1.0")
-            self.rule_weight = self.rule_weight / total_weight
-            self.ai_weight = self.ai_weight / total_weight
-        
-        # AI reasoner settings
-        ai_reasoner = reasoning_config.get('ai_reasoner', {})
-        self.ai_enabled = ai_reasoner.get('enabled', True)
-        self.ai_min_threshold = ai_reasoner.get('min_confidence_threshold', 50)
-        
-        # Explanation settings
+
         explanation = reasoning_config.get('explanation', {})
         self.include_explanation = explanation.get('include_in_telegram', True)
         self.max_explanation_length = explanation.get('max_length', 500)
-        
-        # Initialize components
+
         self.rule_scorer = None
         self.ai_reasoner = None
-        
+        self.ai_enabled = reasoning_config.get('ai_reasoner', {}).get('enabled', True)
+
         if self.enabled:
             self._init_components()
-    
+
     def _init_components(self):
         """Initialize rule-based and AI reasoners"""
-        # Import here to avoid circular dependencies
         try:
             from src.scoring.ai_scorer import AIScoringModel
             self.rule_scorer = AIScoringModel(config=self.config)
             logger.info("Rule-based scorer initialized")
         except Exception as e:
             logger.error(f"Failed to initialize rule scorer: {e}")
-        
-        # Initialize AI reasoner
+
         if self.ai_enabled:
             try:
                 from src.reasoning.ai_reasoner import AIReasoner
@@ -86,25 +70,17 @@ class HybridScorer:
             except Exception as e:
                 logger.warning(f"AI reasoner not available: {e}")
                 self.ai_reasoner = None
-    
+
     def score_signal(self, signal) -> ReasoningResult:
         """
-        Score an accumulation signal using hybrid approach
-        
-        Args:
-            signal: AccumulationSignal from detector
-            
-        Returns:
-            ReasoningResult with combined scoring
+        Score signal with rule-based engine and optional AI explanation.
+        AI must not replace or distort factor scores.
         """
-        if not self.enabled:
-            # Fallback to simple rule-based scoring
+        if not self.rule_scorer:
             return self._fallback_score(signal)
-        
-        # Get rule-based score
-        rule_score, positive, negative = self._get_rule_score(signal)
-        
-        # Get AI score (if available)
+
+        stock_score = self.rule_scorer.score_signal(signal)
+
         ai_score = None
         ai_insights = []
         if self.ai_reasoner and self.ai_reasoner.is_available():
@@ -115,198 +91,115 @@ class HybridScorer:
                     ai_insights = ai_result.get('insights', [])
             except Exception as e:
                 logger.warning(f"AI reasoning failed for {signal.stock_symbol}: {e}")
-        
-        # Calculate hybrid score
-        total_score = self._calculate_hybrid_score(rule_score, ai_score)
-        
-        # Determine confidence level
-        confidence = self._determine_confidence(total_score, ai_score)
-        
-        # Generate reasoning text
+
         reasoning_text = self._generate_reasoning(
-            signal, rule_score, ai_score, positive, negative, ai_insights
-        )
-        
-        return ReasoningResult(
-            stock_symbol=signal.stock_symbol,
-            total_score=total_score,
-            rule_score=rule_score,
+            signal=signal,
+            stock_score=stock_score,
             ai_score=ai_score,
-            confidence_level=confidence,
-            reasoning_text=reasoning_text,
-            positive_factors=positive,
-            negative_factors=negative,
-            ai_insights=ai_insights,
-            timestamp=datetime.now().isoformat()
+            ai_insights=ai_insights
         )
-    
-    def _get_rule_score(self, signal) -> tuple:
-        """Get rule-based score using existing AIScoringModel"""
-        if not self.rule_scorer:
-            # Fallback to simple scoring
-            return self._simple_rule_score(signal)
-        
-        try:
-            stock_score = self.rule_scorer.score_signal(signal)
-            return (
-                stock_score.total_score,
-                stock_score.positive_factors,
-                stock_score.negative_factors
-            )
-        except Exception as e:
-            logger.error(f"Rule scoring failed: {e}")
-            return self._simple_rule_score(signal)
-    
-    def _simple_rule_score(self, signal) -> tuple:
-        """Simple fallback rule-based scoring"""
-        score = 0
-        positive = []
-        negative = []
-        
-        # Price structure (max 20)
-        if signal.in_range:
-            score += 15
-            positive.append("Strong consolidation phase")
-        
-        # Support strength (max 15)
-        if signal.support_touches >= 3:
-            score += 12
-            positive.append(f"Strong support ({signal.support_touches} touches)")
-        
-        # Volume pattern (max 20)
-        if signal.up_volume_ratio > 1:
-            score += 10
-            if signal.up_volume_ratio > 1.5:
-                score += 5
-                positive.append("Volume accumulation detected")
-        
-        # Delivery (max 15)
-        if signal.delivery_trend == 'increasing':
-            score += 10
-            positive.append("Rising delivery percentage")
-        
-        # MA behavior (max 10)
-        if signal.price_above_ma50 and signal.ma50_trend in ['up', 'flat']:
-            score += 8
-            positive.append("Price above key moving average")
-        
-        # Volatility (max 10)
-        if signal.atr_trend == 'declining':
-            score += 8
-            positive.append("Volatility compression")
-        
-        # Relative strength (max 10)
-        if signal.rs_trend == 'positive':
-            score += 7
-            positive.append("Outperforming market index")
-        
-        # Normalize to 0-100 (max possible is ~85)
-        score = int(score / 85 * 100)
-        
-        return score, positive, negative
-    
-    def _calculate_hybrid_score(self, rule_score: int, ai_score: Optional[int]) -> int:
-        """Calculate combined hybrid score"""
-        if ai_score is None:
-            # Use rule score only
-            return rule_score
-        
-        # Calculate weighted average
-        total = (rule_score * self.rule_weight) + (ai_score * self.ai_weight)
-        return int(round(total))
-    
+
+        return ReasoningResult(
+            stock_symbol=stock_score.stock_symbol,
+            total_score=stock_score.total_score,
+            rule_score=stock_score.total_score,
+            ai_score=ai_score,
+            confidence_level=self._determine_confidence(stock_score.total_score, ai_score),
+            reasoning_text=reasoning_text,
+            positive_factors=stock_score.positive_factors,
+            negative_factors=stock_score.negative_factors,
+            ai_insights=ai_insights,
+            timestamp=datetime.now().isoformat(),
+            rank_score=stock_score.rank_score,
+            classification=stock_score.classification,
+            recommendation=stock_score.recommendation,
+            factor_scores={
+                'price_structure_score': stock_score.price_structure_score,
+                'volume_behavior_score': stock_score.volume_behavior_score,
+                'delivery_data_score': stock_score.delivery_data_score,
+                'support_strength_score': stock_score.support_strength_score,
+                'relative_strength_score': stock_score.relative_strength_score,
+                'volatility_compression_score': stock_score.volatility_compression_score,
+                'ma_behavior_score': stock_score.ma_behavior_score
+            }
+        )
+
     def _determine_confidence(self, total_score: int, ai_score: Optional[int]) -> str:
-        """Determine confidence level based on scores"""
-        if ai_score is not None and ai_score >= self.ai_min_threshold:
-            # High confidence - both methods agree
-            if abs(total_score - ai_score) < 15:
-                return 'high'
-            elif abs(total_score - ai_score) < 30:
-                return 'medium'
-        
-        # Medium confidence - rule-based only or disagreement
+        """Determine confidence level"""
         if total_score >= 75:
+            return 'high'
+        if total_score >= 60:
+            return 'medium'
+        if ai_score is not None and ai_score >= 60:
             return 'medium'
         return 'low'
-    
-    def _generate_reasoning(
-        self,
-        signal,
-        rule_score: int,
-        ai_score: Optional[int],
-        positive: List[str],
-        negative: List[str],
-        ai_insights: List[str]
-    ) -> str:
-        """Generate human-readable reasoning explanation"""
-        lines = []
-        
-        # Header
-        lines.append(f"📊 Score: {rule_score}/100 (Rule-Based)")
-        if ai_score is not None:
-            lines.append(f"🤖 Score: {ai_score}/100 (AI Analysis)")
-            lines.append(f"✨ Combined: {res.total_score}/100")
-        
-        lines.append("")
-        
-        # Key observations
-        if positive:
+
+    def _generate_reasoning(self, signal, stock_score, ai_score: Optional[int], ai_insights: List[str]) -> str:
+        """Generate human-readable explanation"""
+        lines = [
+            f"📊 Rule Score: {stock_score.total_score}/100",
+            f"🏷️ Classification: {stock_score.classification}",
+            ""
+        ]
+
+        if stock_score.positive_factors:
             lines.append("✅ Key Factors:")
-            for factor in positive[:5]:
+            for factor in stock_score.positive_factors[:5]:
                 lines.append(f"   • {factor}")
-        
-        if negative:
+
+        if stock_score.negative_factors:
             lines.append("⚠️ Concerns:")
-            for factor in negative[:3]:
+            for factor in stock_score.negative_factors[:3]:
                 lines.append(f"   • {factor}")
-        
-        # AI insights
-        if ai_insights:
+
+        if ai_score is not None:
             lines.append("")
+            lines.append(f"🤖 AI Context Score: {ai_score}/100")
+
+        if ai_insights:
             lines.append("🧠 AI Insights:")
             for insight in ai_insights[:3]:
                 lines.append(f"   → {insight}")
-        
-        # Technical details
+
         lines.append("")
-        if signal.in_range:
-            range_pct = ((signal.range_high - signal.range_low) / signal.range_high * 100) if signal.range_high > 0 else 0
-            lines.append(f"📈 Range: {signal.range_days} days, {range_pct:.1f}% width")
-        
-        if signal.near_breakout:
-            lines.append(f"🎯 Near breakout: {signal.breakout_distance_pct:.1f}% to resistance")
-        
-        if signal.support_touches > 0:
-            lines.append(f"🛡️ Support: ₹{signal.support_level:.2f} ({signal.support_touches} touches)")
-        
-        # Truncate if needed
+        lines.append(
+            f"📐 Factors: PS {stock_score.price_structure_score}, "
+            f"VB {stock_score.volume_behavior_score}, "
+            f"SS {stock_score.support_strength_score}, "
+            f"RS {stock_score.relative_strength_score}"
+        )
+
+        if getattr(signal, 'near_breakout', False):
+            lines.append(f"🎯 Near breakout: {getattr(signal, 'breakout_distance_pct', 0):.1f}% to resistance")
+
         reasoning = "\n".join(lines)
         if len(reasoning) > self.max_explanation_length:
             reasoning = reasoning[:self.max_explanation_length - 3] + "..."
-        
         return reasoning
-    
+
     def _fallback_score(self, signal) -> ReasoningResult:
-        """Fallback when reasoning is disabled"""
-        score, positive, negative = self._simple_rule_score(signal)
-        
+        """Fallback when scorer unavailable"""
         return ReasoningResult(
             stock_symbol=signal.stock_symbol,
-            total_score=score,
-            rule_score=score,
+            total_score=0,
+            rule_score=0,
             ai_score=None,
-            confidence_level='medium' if score >= 60 else 'low',
-            reasoning_text=self._generate_reasoning(signal, score, None, positive, negative, []),
-            positive_factors=positive,
-            negative_factors=negative,
+            confidence_level='low',
+            reasoning_text="Rule scorer unavailable",
+            positive_factors=[],
+            negative_factors=["Rule scorer unavailable"],
             ai_insights=[],
-            timestamp=datetime.now().isoformat()
+            timestamp=datetime.now().isoformat(),
+            rank_score=0.0,
+            classification="Ignore",
+            recommendation="Skip",
+            factor_scores={}
         )
-    
+
     def score_all_signals(self, signals: List) -> List[ReasoningResult]:
         """Score all accumulation signals"""
         results = []
-        
+
         for signal in signals:
             try:
                 result = self.score_signal(signal)
@@ -314,9 +207,14 @@ class HybridScorer:
             except Exception as e:
                 logger.error(f"Error scoring {signal.stock_symbol}: {e}")
                 continue
-        
-        # Sort by total score
-        results.sort(key=lambda x: x.total_score, reverse=True)
+
+        results.sort(
+            key=lambda x: (
+                x.rank_score,
+                x.total_score
+            ),
+            reverse=True
+        )
         return results
 
 

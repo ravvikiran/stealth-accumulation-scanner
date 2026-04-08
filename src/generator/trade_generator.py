@@ -417,62 +417,42 @@ class TradeSetupGenerator:
         return setups
 
 
-def format_telegram_alert(setup: TradeSetup) -> str:
+def format_telegram_alert(setup: TradeSetup, is_below_threshold: bool = False) -> str:
     """
     Format a trade setup as Telegram alert message
     
     Args:
         setup: TradeSetup object
+        is_below_threshold: If True, add warning prefix
         
     Returns:
         Formatted Telegram message string
     """
-    # Emoji mapping
-    emoji = {
-        'stock': '📊',
-        'phase': '🔹',
-        'entry': '💰',
-        'stop': '🛑',
-        'target': '🎯',
-        'confidence': '📈',
-        'duration': '⏳',
-        'signals': '📋',
-        'risk': '⚠️',
-        'time': '🕐'
-    }
+    status_emoji = "⚠️ Status: Below Threshold\n" if is_below_threshold else ""
     
-    # Build message
     lines = []
     
-    # Header
-    lines.append(f"{emoji['stock']} Stock Alert: {setup.stock_symbol}")
+    lines.append(f"📊 Stock Alert: {setup.stock_symbol}")
     if setup.stock_name != setup.stock_symbol:
-        lines.append(f"   {setup.stock_name}")
+        lines.append(f"{setup.stock_name}")
     
     lines.append("")
-    
-    # Phase
-    lines.append(f"{emoji['phase']} Phase: {setup.phase}")
+    lines.append(f"{status_emoji}🔹 Phase: {setup.phase}")
     
     lines.append("")
-    
-    # Entry & Stop
-    lines.append(f"{emoji['entry']} Entry: ₹{setup.entry_price:.2f}")
-    lines.append(f"{emoji['stop']} Stop Loss: ₹{setup.stop_loss:.2f} (-{setup.stop_loss_pct:.1f}%)")
+    lines.append(f"💰 Entry: ₹{setup.entry_price:.2f}")
+    lines.append(f"🛑 SL: ₹{setup.stop_loss:.2f} ({setup.stop_loss_pct:.1f}%)")
     
     lines.append("")
-    
-    # Targets with time estimates
-    lines.append(f"{emoji['target']} Targets:")
-    lines.append(f"   T1: ₹{setup.target_1:.2f} | +{setup.target_1_distance:.2f} pts | {setup.target_1_time_estimate} | R:R {setup.risk_reward_1:.1f}")
-    lines.append(f"   T2: ₹{setup.target_2:.2f} | +{setup.target_2_distance:.2f} pts | {setup.target_2_time_estimate} | R:R {setup.risk_reward_2:.1f}")
-    lines.append(f"   T3: ₹{setup.target_3:.2f} | +{setup.target_3_distance:.2f} pts | {setup.target_3_time_estimate} | R:R {setup.risk_reward_3:.1f}")
+    lines.append("🎯 Targets:")
+    lines.append(f"T1: ₹{setup.target_1:.2f} (+{setup.target_1_distance:.0f} | {setup.target_1_time_estimate} | R:R {setup.risk_reward_1:.1f})")
+    lines.append(f"T2: ₹{setup.target_2:.2f} (+{setup.target_2_distance:.0f} | {setup.target_2_time_estimate} | R:R {setup.risk_reward_2:.1f})")
+    lines.append(f"T3: ₹{setup.target_3:.2f} (+{setup.target_3_distance:.0f} | {setup.target_3_time_estimate} | R:R {setup.risk_reward_3:.1f})")
     
     lines.append("")
-    
-    # Confidence
-    lines.append(f"{emoji['confidence']} Confidence: {setup.confidence_score}/100")
-    lines.append(f"{emoji['risk']} Risk: {setup.risk_level}")
+    lines.append(f"📈 Confidence: {setup.confidence_score}/100")
+    risk_emoji = "🔴" if setup.risk_level == "High" else "🟡" if setup.risk_level == "Medium" else "🟢"
+    lines.append(f"{risk_emoji} Risk: {setup.risk_level}")
     
     return "\n".join(lines)
 
@@ -487,21 +467,18 @@ def format_summary_alert(setups: List[TradeSetup]) -> str:
     Returns:
         Formatted summary message
     """
-    lines = []
+    if not setups:
+        return "📊 Daily Accumulation Scanner\n\nNo accumulation setups found today."
     
-    lines.append("📊 Daily Accumulation Scanner Summary")
-    lines.append("=" * 40)
-    lines.append("")
-    lines.append(f"Found {len(setups)} potential setups:")
-    lines.append("")
+    lines = []
+    lines.append(f"📊 *Daily Scan Complete*")
+    lines.append(f"Found *{len(setups)}* potential setups\n")
     
     for i, setup in enumerate(setups, 1):
-        lines.append(f"{i}. {setup.stock_symbol} - Score: {setup.confidence_score}/100")
+        risk_emoji = "🔴" if setup.risk_level == "High" else "🟡" if setup.risk_level == "Medium" else "🟢"
+        lines.append(f"{i}. *{setup.stock_symbol}* {risk_emoji}")
         lines.append(f"   Entry: ₹{setup.entry_price:.2f} | SL: ₹{setup.stop_loss:.2f}")
         lines.append(f"   Targets: ₹{setup.target_1:.2f} / ₹{setup.target_2:.2f} / ₹{setup.target_3:.2f}")
         lines.append("")
-    
-    lines.append("-" * 40)
-    lines.append("Scan completed at 3:00 PM IST")
     
     return "\n".join(lines)
