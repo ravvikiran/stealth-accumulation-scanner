@@ -26,6 +26,7 @@ python-dotenv>=1.0.0
 
 # Date/Time handling
 python-dateutil>=2.8.0
+pytz>=2023.3
 
 # LLM/AI Providers (optional - install only the ones you need)
 # OpenAI GPT
@@ -34,3 +35,6 @@ openai>=1.0.0
 anthropic>=0.25.0
 # Google Gemini
 google-genai>=0.1.0
+
+# Testing
+pytest>=7.0.0
